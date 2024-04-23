@@ -1,0 +1,18 @@
+from rest_framework import serializers
+
+
+class CurrentProfileDefault:
+    requires_context = True
+
+    def __call__(self, serializer_field):
+        return serializer_field.context['request'].user.profile
+
+    def __repr__(self):
+        return '%s()' % self.__class__.__name__
+
+
+class EmptySerializer(serializers.Serializer):
+    pass
+
+class EmailSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True, )

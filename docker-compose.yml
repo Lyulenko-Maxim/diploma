@@ -1,0 +1,101 @@
+services:
+
+  database:
+    container_name: database
+    image: postgres:14.11-alpine
+    ports:
+      - "5433:5432"
+    env_file:
+      - .env
+    volumes:
+      - database_data:/var/lib/postgresql/data/
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: root@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  redis:
+    container_name: redis
+    hostname: redis
+    image: redis:7.2-alpine
+
+  backend:
+    container_name: backend
+    build:
+      context: backend
+      target: builder
+      args:
+        DEBUG: 1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    env_file:
+      - backend/.env
+    environment:
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8000"
+    restart: always
+    depends_on:
+      - database
+      - redis
+
+  worker:
+    container_name: worker
+    hostname: worker
+    build:
+      context: backend
+      target: builder
+      args:
+        DEBUG: 1
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    env_file:
+      - backend/.env
+    environment:
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+    entrypoint: celery
+    command: -A core worker -l info
+    links:
+      - redis
+    depends_on:
+      - database
+      - redis
+
+  flower:
+    container_name: flower
+    hostname: flower
+    image: mher/flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379
+      - FLOWER_PORT=5555
+      - TZ=Europe/Moscow
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./flower-start.sh:/flower-start.sh
+      - flower_data:/data
+    command: [ "/flower-start.sh" ]
+    depends_on:
+      - redis
+      - worker
+
+volumes:
+  database_data:
+  pgadmin_data:
+  flower_data:
