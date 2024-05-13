@@ -35,6 +35,10 @@ def get_current_host() -> str:
         return 'localhost'
 
 
+def get_client_host() -> str:
+    return 'http://localhost:3000'
+
+
 def generate_activation_link(user: User) -> str:
     return urlsafe_base64_encode(force_bytes(f'{user.id}{SEPARATOR}{user.email}'))
 
@@ -45,7 +49,7 @@ def check_activation_link(link: str) -> User | None:
         user_id, email = checking_data.split(SEPARATOR)
         user = User.objects.get(id=user_id, email=email)
         return None if user.is_verified else user
-    except User.DoesNotExist:
+    except (Exception, User.DoesNotExist):
         return None
 
 
@@ -58,7 +62,7 @@ def send_activation_email(user: User):
         context={
             'email': user.email,
             'content_message': 'We are happy that we defined communicate with as!',
-            'activation_link': f'{get_current_host()}/api/authentication/activate/{activation_link}/'
+            'activation_link': f'{get_client_host()}/auth/activate/?token={activation_link}'
         }
     )
 
@@ -83,5 +87,3 @@ def set_token_cookies(response: Response, access_token, refresh_token) -> Respon
     response.set_cookie(key='access_token', value=access_token, httponly=True, max_age=token_max_age)
     response.set_cookie(key='refresh_token', value=refresh_token, httponly=True, max_age=token_max_age)
     return response
-
-

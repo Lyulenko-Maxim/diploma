@@ -4,8 +4,8 @@ from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from .utils import set_token_cookies
 from .services import JWTService
+from .utils import set_token_cookies
 
 User = get_user_model()
 

@@ -1,5 +1,4 @@
 from django.contrib.auth import get_user_model
-
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed
@@ -10,7 +9,6 @@ from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, RegisterSerializer
 from .utils import check_activation_link, check_credentials, login, logout, send_activation_email
-from ..users.models import Profile
 from ..users.permissions import IsAnonymous
 
 User = get_user_model()
@@ -32,13 +30,12 @@ class ActivateView(APIView):
         user = check_activation_link(self.kwargs.get('token'))
 
         if not user:
-            return Response({'error': 'Invalid activation link'}, status=404)
+            return Response(data={'error': 'Invalid activation link'}, status=status.HTTP_404_NOT_FOUND)
 
         user.is_active = True
         user.is_verified = True
-        user.save()
-        profile, _ = Profile.objects.get_or_create(user=user)
-        return login(user=user, message='Successful account activation', status=status.HTTP_200_OK)
+        user.save(update_fields=['is_active', 'is_verified', ])
+        return Response(data={'success': 'Successful account activation'}, status=status.HTTP_200_OK)
 
 
 class LoginView(CreateAPIView):

@@ -5,7 +5,7 @@ from rest_framework import serializers
 from rest_framework.fields import CurrentUserDefault
 
 from ..shared.serializers import CurrentProfileDefault
-from .models import Profile, ProfilePhoto
+from .models import Profile
 
 User = get_user_model()
 
@@ -58,20 +58,25 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 
 class ProfileReadSerializer(serializers.ModelSerializer):
+    online = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Profile
-        fields = ('id', 'first_name', 'last_name',)
+        fields = ('id', 'username', 'first_name', 'last_name', 'online', 'photo', 'banner_color_hex',)
+
+    def get_online(self, obj):
+        return obj.user.connections > 0
 
 
-class ProfilePhotoReadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProfilePhoto
-        fields = ('id', 'image',)
-
-
-class ProfilePhotoSerializer(serializers.ModelSerializer):
-    profile = serializers.HiddenField(default=CurrentProfileDefault())
-
-    class Meta:
-        model = ProfilePhoto
-        fields = ('id', 'image', 'profile',)
+# class ProfilePhotoReadSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ProfilePhoto
+#         fields = ('id', 'image',)
+#
+#
+# class ProfilePhotoSerializer(serializers.ModelSerializer):
+#     profile = serializers.HiddenField(default=CurrentProfileDefault())
+#
+#     class Meta:
+#         model = ProfilePhoto
+#         fields = ('id', 'image', 'profile',)

@@ -37,4 +37,4 @@ class JWTAuthentication(BaseAuthentication):
         header in a `401 Unauthenticated` response, or `None` if the
         authentication scheme should return `403 Permission Denied` responses.
         """
-        pass
+        return '401 Unauthenticated'

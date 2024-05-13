@@ -7,14 +7,16 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
+from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import Profile, ProfilePhoto
+from .models import Profile
 from .serializers import (
-    ChangePasswordSerializer, ProfilePhotoReadSerializer, ProfilePhotoSerializer, ProfileSerializer,
+    ChangePasswordSerializer,
+    ProfileReadSerializer,
+    ProfileSerializer,
     UserSerializer
 )
-
-from .utils import create_account_deletion_request, get_user_deletion_task_id, safe_revoke
+from .utils import create_account_deletion_request, safe_revoke
 from ..shared.serializers import EmailSerializer, EmptySerializer
 
 User = get_user_model()
@@ -105,24 +107,38 @@ class UserViewSet(viewsets.GenericViewSet):
         return response
 
 
-class ProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, GenericViewSet):
-    serializer_class = ProfileSerializer
+class ProfileViewSet(GenericViewSet):
+    serializer_class = ProfileReadSerializer
 
-    def get_queryset(self):
-        return Profile.objects.filter(user=self.request.user)
+    @action(detail=False, methods=['get'], url_path='profile')
+    def profile(self, request, *args, **kwargs):
+        profile = request.user.profile
+        serializer = self.get_serializer(profile)
+        return Response(serializer.data)
 
-    # def get_serializer_class(self):
-    #     if self.action in ('update', 'partial_update',):
-    #         self.serializer_class = ProfilePhotoSerializer
-    #
-    #     super().get_serializer_class()
+    @action(detail=False, methods=['patch'], url_path='profile/edit')
+    def edit(self, request, *args, **kwargs):
+        instance = request.user.profile
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
 
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
 
-class ProfilePhotoViewSet(ModelViewSet):
-    queryset = ProfilePhoto.objects.all()
+        return Response(serializer.data)
 
     def get_serializer_class(self):
-        if self.action in ('create',):
-            self.serializer_class = ProfilePhotoSerializer
-        else:
-            self.serializer_class = ProfilePhotoReadSerializer
+        if self.action in ('update', 'partial_update',):
+            self.serializer_class = ProfileReadSerializer
+
+        return super().get_serializer_class()
+
+# class ProfilePhotoViewSet(ModelViewSet):
+#     queryset = ProfilePhoto.objects.all()
+#
+#     def get_serializer_class(self):
+#         if self.action in ('create',):
+#             self.serializer_class = ProfilePhotoSerializer
+#         else:
+#             self.serializer_class = ProfilePhotoReadSerializer

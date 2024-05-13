@@ -35,50 +35,107 @@ class InviteLimit:
 
 
 class Permissions:
-    class Name:
-        CREATE_WORKSPACE_GROUP: Final[str] = 'Create workspace group'
-        EDIT_WORKSPACE_GROUP: Final[str] = 'Edit workspace group'
-        CHANGE_WORKSPACE_GROUP_PERMISSIONS: Final[str] = 'Change workspace group permission'
+    class ContentType:
+        PROJECT: Final[str] = 'Project'
+        TASK: Final[str] = 'Task'
+        STATUS: Final[str] = 'Status'
+        MARKER: Final[str] = 'Marker'
+        GROUP: Final[str] = 'Group'
+        MEMBER: Final[str] = 'Member'
+        INVITATION: Final[str] = 'Invitation'
+        COMMENT: Final[str] = 'Comment'
 
-        EDIT_BOARD: Final[str] = 'Edit board'
-        INVITE_MEMBERS: Final[str] = 'Invite members'
-        EXPEL_MEMBERS: Final[str] = 'Expel members'
-        EDIT_MEMBERS_PERMISSIONS: Final[str] = 'Edit members permissions'
-        CREATE_LISTS: Final[str] = 'Create lists'
-        EDIT_LISTS: Final[str] = 'Edit lists'
-        DELETE_LISTS: Final[str] = 'Delete lists'
-        CREATE_TASKS: Final[str] = 'Create tasks'
-        EDIT_TASKS: Final[str] = 'Edit tasks'
-        DELETE_TASKS: Final[str] = 'Delete tasks'
-        ASSIGN_EXECUTORS_TO_TASKS: Final[str] = 'Assign executors to tasks'
+    class ActionType:
+        VIEW: Final[str] = 'View'
+        CREATE: Final[str] = 'Create'
+        UPDATE: Final[str] = 'Update'
+        DELETE: Final[str] = 'Delete'
+        ASSIGN: Final[str] = 'Assign'
+
+    class Name:
+        ADMINISTRATOR: Final[str] = 'Administrator'
+
+        UPDATE_PROJECT: Final[str] = 'Update project'
+        DELETE_PROJECT: Final[str] = 'Delete project'
+
+        CREATE_STATUS: Final[str] = 'Create status'
+        UPDATE_STATUS: Final[str] = 'Update status'
+        DELETE_STATUS: Final[str] = 'Delete status'
+
+        CREATE_MARKER: Final[str] = 'Create marker'
+        UPDATE_MARKER: Final[str] = 'Update marker'
+        DELETE_MARKER: Final[str] = 'Delete marker'
+
+        CREATE_TASK: Final[str] = 'Create task'
+        UPDATE_TASK: Final[str] = 'Update task'
+        DELETE_TASK: Final[str] = 'Delete task'
+        ASSIGN_TASK: Final[str] = 'Assign task to member'
+
+        CREATE_GROUP: Final[str] = 'Create group'
+        UPDATE_GROUP: Final[str] = 'Update group'
+        DELETE_GROUP: Final[str] = 'Delete group'
+        ASSIGN_GROUP: Final[str] = 'Assign group to member'
+        VIEW_GROUP: Final[str] = 'View group'
+
+        INVITE_MEMBER: Final[str] = 'Invite member'
+        EXPEL_MEMBER: Final[str] = 'Expel member'
+
+        CREATE_COMMENT: Final[str] = 'Create comment'
+        UPDATE_COMMENT: Final[str] = 'Update comment'
+        DELETE_COMMENT: Final[str] = 'Delete comment'
 
     class Code:
-        CREATE_WORKSPACE_GROUP: Final[str] = 'workspace_group_create'
-        EDIT_WORKSPACE_GROUP: Final[str] = 'workspace_group_edit'
-        CHANGE_WORKSPACE_GROUP_PERMISSIONS: Final[str] = 'workspace_group_permission_change'
+        ADMINISTRATOR: Final[str] = 'admin'
 
-        EDIT_BOARD: Final[str] = 'board_edit'
-        INVITE_MEMBERS: Final[str] = 'board_members_invite'
-        EXPEL_MEMBERS: Final[str] = 'board_members_expel'
-        EDIT_MEMBERS_PERMISSIONS: Final[str] = 'board_members_edit_permissions'
-        CREATE_LISTS: Final[str] = 'board_lists_create'
-        EDIT_LISTS: Final[str] = 'board_lists_edit'
-        DELETE_LISTS: Final[str] = 'board_lists_delete'
-        CREATE_TASKS: Final[str] = 'board_tasks_create'
-        EDIT_TASKS: Final[str] = 'board_tasks_edit'
-        DELETE_TASKS: Final[str] = 'board_tasks_delete'
-        ASSIGN_EXECUTORS_TO_TASKS: Final[str] = 'board_tasks_assign_executors'
+        UPDATE_PROJECT: Final[str] = 'project_update'
+        DELETE_PROJECT: Final[str] = 'project_delete'
+
+        CREATE_STATUS: Final[str] = 'status_create'
+        UPDATE_STATUS: Final[str] = 'status_update'
+        DELETE_STATUS: Final[str] = 'status_delete'
+
+        CREATE_MARKER: Final[str] = 'marker_create'
+        UPDATE_MARKER: Final[str] = 'marker_update'
+        DELETE_MARKER: Final[str] = 'marker_delete'
+
+        CREATE_TASK: Final[str] = 'task_create'
+        UPDATE_TASK: Final[str] = 'task_update'
+        DELETE_TASK: Final[str] = 'task_delete'
+        ASSIGN_TASK: Final[str] = 'task_assign'
+
+        CREATE_GROUP: Final[str] = 'group_create'
+        UPDATE_GROUP: Final[str] = 'group_update'
+        DELETE_GROUP: Final[str] = 'group_delete'
+        ASSIGN_GROUP: Final[str] = 'group_assign'
+        VIEW_GROUP: Final[str] = 'group_view'
+
+        INVITE_MEMBER: Final[str] = 'member_invite'
+        EXPEL_MEMBER: Final[str] = 'member_expel'
+
+        CREATE_COMMENT: Final[str] = 'comment_create'
+        DELETE_COMMENT: Final[str] = 'comment_delete'
 
     DATA: Final[tuple[str, str]] = [
-        (Name.EDIT_BOARD, Code.EDIT_BOARD),
-        (Name.INVITE_MEMBERS, Code.INVITE_MEMBERS),
-        (Name.EXPEL_MEMBERS, Code.EXPEL_MEMBERS),
-        (Name.EDIT_MEMBERS_PERMISSIONS, Code.EDIT_MEMBERS_PERMISSIONS),
-        (Name.CREATE_LISTS, Code.CREATE_LISTS),
-        (Name.EDIT_LISTS, Code.EDIT_LISTS),
-        (Name.DELETE_LISTS, Code.DELETE_LISTS),
-        (Name.CREATE_TASKS, Code.CREATE_TASKS),
-        (Name.EDIT_TASKS, Code.EDIT_TASKS),
-        (Name.DELETE_TASKS, Code.DELETE_TASKS),
-        (Name.ASSIGN_EXECUTORS_TO_TASKS, Code.ASSIGN_EXECUTORS_TO_TASKS)
+        (Name.ADMINISTRATOR, Code.ADMINISTRATOR),
+        (Name.UPDATE_PROJECT, Code.UPDATE_PROJECT),
+        (Name.DELETE_PROJECT, Code.DELETE_PROJECT),
+        (Name.CREATE_STATUS, Code.CREATE_STATUS),
+        (Name.UPDATE_STATUS, Code.UPDATE_STATUS),
+        (Name.DELETE_STATUS, Code.DELETE_STATUS),
+        (Name.CREATE_MARKER, Code.CREATE_MARKER),
+        (Name.UPDATE_MARKER, Code.UPDATE_MARKER),
+        (Name.DELETE_MARKER, Code.DELETE_MARKER),
+        (Name.CREATE_TASK, Code.CREATE_TASK),
+        (Name.UPDATE_TASK, Code.UPDATE_TASK),
+        (Name.DELETE_TASK, Code.DELETE_TASK),
+        (Name.ASSIGN_TASK, Code.ASSIGN_TASK),
+        (Name.CREATE_GROUP, Code.CREATE_GROUP),
+        (Name.UPDATE_GROUP, Code.UPDATE_GROUP),
+        (Name.DELETE_GROUP, Code.DELETE_GROUP),
+        (Name.ASSIGN_GROUP, Code.ASSIGN_GROUP),
+        (Name.VIEW_GROUP, Code.VIEW_GROUP),
+        (Name.INVITE_MEMBER, Code.INVITE_MEMBER),
+        (Name.EXPEL_MEMBER, Code.EXPEL_MEMBER),
+        (Name.CREATE_COMMENT, Code.CREATE_COMMENT),
+        (Name.DELETE_COMMENT, Code.DELETE_COMMENT),
     ]

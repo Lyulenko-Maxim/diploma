@@ -1,36 +1,43 @@
-from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from src.shared.constants import Color
-from src.shared.serializers import CurrentProfileDefault
-from .models import Board, BoardMember, Check, CheckList, Comment, List, Permission, Task, Workspace, WorkspaceMember
-from .models import BoardBackground, Marker
-from ..permissions.models import Group
-from ..users.serializers import ProfileReadSerializer, ProfileSerializer
+from .models import Comment, Dashboard, DashboardProject, Group, Marker, Permission, Project, ProjectMember, Status, \
+    Task
+from ..users.serializers import ProfileReadSerializer
 
 
-class BoardBackgroundReadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BoardBackground
-        fields = ('id', 'image', 'color_hex',)
+class ProjectPKRelatedField(serializers.PrimaryKeyRelatedField):
+    def get_queryset(self):
+        project_pk = self.context.get('project_pk', None)
+        queryset = super().get_queryset()
+        if not project_pk or not queryset:
+            return None
+        return queryset.filter(project=project_pk)
 
 
-class BoardBackgroundSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BoardBackground
-        fields = ('id', 'image', 'color_hex',)
+class GroupPKRelatedField(serializers.PrimaryKeyRelatedField):
+    def get_queryset(self):
+        project_pk = self.context.get('project_pk', None)
+        queryset = super().get_queryset()
+        if not project_pk or not queryset:
+            return None
+        return queryset.filter(project=project_pk)
 
-    def validate(self, data):
-        image = data.get('image')
-        color_hex = data.get('color_hex')
 
-        if image and color_hex:
-            raise serializers.ValidationError(_('Only one of image or color can be provided.'))
+class TaskPKRelatedField(serializers.PrimaryKeyRelatedField):
+    def get_queryset(self):
+        project_pk = self.context.get('project_pk', None)
+        instance: Task = self.context.get('instance', None)
 
-        if not image and not color_hex:
-            data['color_hex'] = Color.WHITE_HEX
+        if instance:
+            queryset = instance.valid_dependencies()
+            return queryset
 
-        return data
+        queryset = super().get_queryset()
+
+        if not project_pk or not queryset:
+            return None
+
+        return queryset.filter(project=project_pk)
 
 
 class MarkerReadSerializer(serializers.ModelSerializer):
@@ -42,164 +49,271 @@ class MarkerReadSerializer(serializers.ModelSerializer):
 class MarkerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Marker
-        fields = ('id', 'name', 'color_hex', 'board',)
+        fields = ('id', 'name', 'color_hex', 'project',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'project': {'read_only': True, },
+        }
 
 
-class CheckReadSerializer(serializers.ModelSerializer):
+class PermissionSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Check
-        fields = ('id', 'title', 'deadline', 'is_completed', 'executors',)
+        model = Permission
+        fields = ('id', 'name', 'code',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'name': {'read_only': True, },
+            'code': {'read_only': True, },
+        }
 
 
-class CheckListReadSerializer(serializers.ModelSerializer):
-    checks = CheckReadSerializer(many=True, read_only=True)
+class GroupListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ('id', 'name', 'color_hex', 'order',)
+
+
+class ProjectMemberListSerializer(serializers.ModelSerializer):
+    profile = ProfileReadSerializer(read_only=True)
+    groups = GroupListSerializer(read_only=True, many=True)
 
     class Meta:
-        model = CheckList
-        fields = ('id', 'name', 'checks')
+        model = ProjectMember
+        fields = ('id', 'profile', 'groups', 'date_joined', 'deactivated',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'date_joined': {'read_only': True, },
+            'groups': {'read_only': True, },
+            'deactivated': {'read_only': True, },
+        }
 
 
-class CheckListSerializer(serializers.ModelSerializer):
+class ProjectMemberAssignSerializer(serializers.ModelSerializer):
+    groups = ProjectPKRelatedField(queryset=Group.objects, many=True, )
 
     class Meta:
-        model = CheckList
-        fields = ('id', 'name',)
+        model = ProjectMember
+        fields = ('id', 'groups',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+        }
+
+    def get_permissions(self, obj):
+        serializer = PermissionSerializer(instance=obj.get_permissions(), many=True, )
+        return serializer.data
 
 
-class BoardMemberReadSerializer(serializers.ModelSerializer):
-    member = ProfileSerializer()
+class ProjectMemberSerializer(serializers.ModelSerializer):
+    profile = ProfileReadSerializer(read_only=True)
+    permissions = serializers.SerializerMethodField(read_only=True)
+    groups = GroupListSerializer(read_only=True, many=True, )
 
     class Meta:
-        model = BoardMember
-        fields = ('id', 'member', 'date_joined',)
+        model = ProjectMember
+        fields = ('id', 'profile', 'date_joined', 'deactivated', 'groups', 'permissions',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'date_joined': {'read_only': True, },
+            'groups': {'read_only': True, },
+            'deactivated': {'read_only': True, },
+        }
+
+    def get_permissions(self, obj):
+        serializer = PermissionSerializer(instance=obj.get_permissions(), many=True, )
+        return serializer.data
 
 
-class CommentReadSerializer(serializers.ModelSerializer):
-    sender = BoardMemberReadSerializer(many=True, read_only=True)
+class GroupSerializer(serializers.ModelSerializer):
+    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True)
+
+    # members = ProjectPKRelatedField(queryset=ProjectMember.objects, many=True)
+
+    class Meta:
+        model = Group
+        fields = ('id', 'name', 'color_hex', 'order', 'permissions',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+        }
+
+
+class RGroupSerializer(serializers.ModelSerializer):
+    permissions = PermissionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Group
+        fields = ('id', 'name', 'color_hex', 'order', 'project', 'permissions',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'name': {'read_only': True, },
+            'color_hex': {'read_only': True, },
+            'order': {'read_only': True, },
+            'project': {'read_only': True, },
+        }
+
+
+class ProjectListSerializer(serializers.ModelSerializer):
+    owner = ProfileReadSerializer(read_only=True, )
+
+    class Meta:
+        model = Project
+        fields = ('id', 'name', 'slug', 'owner',)
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    # members = ProjectMemberSerializer(read_only=True, many=True, source='members_set')
+
+    class Meta:
+        model = Project
+        fields = ('id', 'name', 'slug', 'description', 'owner',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'slug': {'read_only': True, },
+            'owner': {'read_only': True, },
+        }
+
+
+class DashboardProjectSerializer(serializers.ModelSerializer):
+    project = ProjectListSerializer(read_only=True, )
+    my_group = serializers.SerializerMethodField(read_only=True, )
+    members = serializers.SerializerMethodField(read_only=True)
+    members_count = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = DashboardProject
+        fields = ('id', 'project', 'dashboard', 'order', 'my_group', 'members', 'members_count',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'project': {'read_only': True, },
+            'dashboard': {'read_only': True, },
+        }
+
+    def get_my_group(self, obj):
+        instance = (
+            Group.objects
+            .filter(project=obj.project, members__profile=obj.dashboard.owner)
+            .order_by('order')
+            .first()
+        )
+        return GroupSerializer(instance=instance).data
+
+    def get_members(self, obj):
+        instance = ProjectMember.objects.filter(project=obj.project)
+        return ProjectMemberSerializer(instance=instance, many=True, context=self.context).data
+
+    def get_members_count(self, obj):
+        return obj.project.members.count()
+
+
+class DashboardSerializer(serializers.ModelSerializer):
+    projects = DashboardProjectSerializer(read_only=True, many=True, source='dashboardproject_set')
+
+    class Meta:
+        model = Dashboard
+        fields = ('id', 'owner', 'projects',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'owner': {'read_only': True, },
+        }
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    owner = ProjectMemberSerializer(read_only=True)
+    mentioned_members = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Comment
-        fields = ('id', 'content', 'sender',)
+        fields = ('id', 'content', 'owner', 'created_at', 'last_edit', 'mentioned_members',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'created_at': {'read_only': True, },
+            'last_edit': {'read_only': True, },
+            'mentioned_members': {'read_only': True, },
+        }
+
+    def get_mentioned_members(self, obj):
+        serializer = ProjectMemberSerializer(instance=obj.mentioned_members, many=True, )
+        return serializer.data
 
 
-class TaskReadSerializer(serializers.ModelSerializer):
-    check_lists = CheckListReadSerializer(many=True, read_only=True, source='checklist_set')
-    comments = CommentReadSerializer(many=True, read_only=True, source='comment_set')
+class StatusSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Status
+        fields = ('id', 'name', 'order', 'category',)
+        extra_kwargs = {
+            'id': {'read_only': True, },
+        }
+
+
+class TaskWithoutDepSerializer(serializers.ModelSerializer):
+    comments = CommentSerializer(read_only=True, many=True)
+    assignee = ProjectMemberSerializer(read_only=True)
+    status = StatusSerializer(read_only=True)
 
     class Meta:
         model = Task
-        fields = ('id', 'title', 'owner', 'list', 'check_lists', 'description', 'deadline', 'created_at', 'is_archived',
-                  'comments')
+        fields = (
+            'id', 'key', 'status', 'title', 'description', 'priority', 'markers', 'due_date', 'created_at',
+            'is_archived', 'project', 'author', 'assignee', 'comments', 'order',
+        )
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'key': {'read_only': True, },
+            'created_at': {'read_only': True, },
+            'is_archived': {'read_only': True, },
+            'project': {'read_only': True, },
+            'author': {'read_only': True, },
+        }
+
+
+class RTaskSerializer(serializers.ModelSerializer):
+    comments = CommentSerializer(many=True, read_only=True, )
+    assignee = ProjectPKRelatedField(queryset=ProjectMember.objects)
+    status = ProjectPKRelatedField(queryset=Status.objects)
+    available_dependencies = serializers.SerializerMethodField(read_only=True)
+    dependencies = TaskPKRelatedField(queryset=Task.objects, many=True, )
+    parent = ProjectPKRelatedField(queryset=Task.objects, allow_null=True, )
+    markers = ProjectPKRelatedField(queryset=Marker.objects, many=True, )
+
+    class Meta:
+        model = Task
+        fields = (
+            'id', 'key', 'status', 'title', 'description', 'priority', 'markers', 'due_date', 'created_at',
+            'is_archived', 'project', 'author', 'assignee', 'parent', 'dependencies',
+            'available_dependencies', 'comments', 'order',
+        )
+        extra_kwargs = {
+            'id': {'read_only': True, },
+            'key': {'read_only': True, },
+            'created_at': {'read_only': True, },
+            'is_archived': {'read_only': True, },
+            'project': {'read_only': True, },
+            'author': {'read_only': True, },
+        }
+
+    def get_available_dependencies(self, obj):
+        serializer = TaskSerializer(instance=obj.available_dependencies(), many=True, )
+        return serializer.data
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    owner = serializers.HiddenField(default=CurrentProfileDefault())
-
     class Meta:
         model = Task
-        fields = ('id', 'title', 'owner', 'description',)
+        fields = ('id', 'title', 'description',)
 
-
-class ListSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = List
-        fields = ('id', 'name', 'order',)
-
-
-class ListReadSerializer(serializers.ModelSerializer):
-    tasks = TaskReadSerializer(many=True, source='task_set')
-
-    class Meta:
-        model = List
-        fields = ('id', 'name', 'order', 'tasks',)
-
-
-class BoardMemberPermissionSerializer(serializers.ModelSerializer):
-    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True)
-
-    class Meta:
-        model = BoardMember
-        fields = ('permissions',)
-
-    def update(self, instance, validated_data):
-        permissions_data = validated_data.pop('permissions', [])
-        instance.permissions.set(permissions_data)
-        return instance
-
-
-class BoardSerializer(serializers.ModelSerializer):
-    owner = serializers.HiddenField(default=CurrentProfileDefault())
-
-    class Meta:
-        model = Board
-        fields = ('id', 'name', 'description', 'privacy', 'background', 'owner', 'members',)
-
-
-class BoardReadSerializer(serializers.ModelSerializer):
-    lists = ListReadSerializer(many=True, )
-    members = ProfileReadSerializer(many=True, )
-    markers = MarkerReadSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Board
-        fields = (
-            'id', 'name', 'description', 'privacy', 'workspace', 'background', 'owner', 'members',
-            'lists', 'markers',
-        )
-
-
-class WorkspaceSerializer(serializers.ModelSerializer):
-    owner = serializers.HiddenField(default=CurrentProfileDefault())
-
-    class Meta:
-        model = Workspace
-        fields = ('id', 'name', 'description', 'owner',)
-
-
-class WorkspaceMemberReadSerializer(serializers.ModelSerializer):
-    member = ProfileReadSerializer()
-    permissions = serializers.SerializerMethodField()
-
-    class Meta:
-        model = WorkspaceMember
-        fields = ('id', 'member', 'date_joined', 'groups', 'permissions')
-
-    def get_permissions(self, obj):
-        from src.permissions.serializers import PermissionReadSerializer
-        permission_serializer = PermissionReadSerializer(instance=obj.get_permissions(), many=True)
-        return permission_serializer.data
-
-
-class WorkspaceReadSerializer(serializers.ModelSerializer):
-    from ..permissions.serializers import GroupReadSerializer
-    members = WorkspaceMemberReadSerializer(many=True, read_only=True, source='workspacemember_set')
-    groups = GroupReadSerializer(many=True, read_only=True, )
-    boards = BoardReadSerializer(many=True, read_only=True, source='board_set')
-    owner = ProfileReadSerializer(read_only=True)
-
-    class Meta:
-        model = Workspace
-        fields = ('id', 'name', 'description', 'owner', 'groups', 'members', 'boards')
-
-
-class WorkspaceGroupFilteredPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
-    def get_queryset(self):
-        workspace_pk = self.context.get('workspace_pk', None)
-        queryset = super(WorkspaceGroupFilteredPrimaryKeyRelatedField, self).get_queryset()
-        if not workspace_pk or not queryset:
-            return None
-        return queryset.filter(workspace=workspace_pk)
-
-
-class WorkspaceMemberSerializer(serializers.ModelSerializer):
-    groups = WorkspaceGroupFilteredPrimaryKeyRelatedField(queryset=Group.objects, many=True)
-
-    class Meta:
-        model = WorkspaceMember
-        fields = ('id', 'groups',)
-
-
-class PrivateBoardReadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Board
-        fields = ('id', 'name', 'description', 'privacy',)
+# class BoardBackgroundSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = BoardBackground
+#         fields = ('id', 'image', 'color_hex',)
+#
+#     def validate(self, data):
+#         image = data.get('image')
+#         color_hex = data.get('color_hex')
+#
+#         if image and color_hex:
+#             raise serializers.ValidationError(_('Only one of image or color can be provided.'))
+#
+#         if not image and not color_hex:
+#             data['color_hex'] = Color.WHITE_HEX
+#
+#         return data
