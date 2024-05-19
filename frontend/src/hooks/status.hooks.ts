@@ -2,12 +2,21 @@ import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {toast} from "sonner";
 import {statusService} from "@/services/status.service";
 import {IStatus} from "@/types/status.types";
+import {useEffect, useState} from "react";
 
 export const useStatusList = (projectId: string) => {
-    return useQuery({
+    const {data} = useQuery({
         queryKey: ['status-list', projectId],
         queryFn: () => statusService.list(projectId),
     })
+
+    const [items, setItems] = useState<IStatus[] | undefined>(data);
+
+    useEffect(() => {
+        setItems(data)
+    }, [data])
+
+    return {items, setItems}
 }
 
 export const useStatusRetrieve = (projectId: string, id: string) => {

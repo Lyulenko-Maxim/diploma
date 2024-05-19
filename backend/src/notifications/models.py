@@ -3,27 +3,31 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from src.shared.models import UUIDModel
-from src.shared.models import UUIDModel
+from src.shared.models import BaseModel
 from src.users.models import Profile
-from .mixins import InvitationMixin
-from ..management.models import Project, ProjectMember
+from ..management.models import Project, ProjectMember, Task
 
 User = get_user_model()
 
 
-class Notification(UUIDModel):
-    message = models.TextField(_('message'), )
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
+class Notification(BaseModel):
+    ACTION_CHOICES = [
+        ('expelled', 'Expelled'),
+        ('task_updated', 'Task updated'),
+        ('task_moved', 'Task moved'),
+        ('task_deleted', 'Task deleted'),
+    ]
+    action = models.CharField(_("action"), choices=ACTION_CHOICES, max_length=15)
+    data = models.JSONField(_('data'), )
     recipient = models.ForeignKey(
         to=Profile,
         on_delete=models.CASCADE,
         related_name='notifications',
-        verbose_name=_('recipient'),
+        verbose_name=_('profile')
     )
 
 
-class Invitation(UUIDModel, InvitationMixin):
+class Invitation(BaseModel):
     project = models.ForeignKey(
         to=Project,
         on_delete=models.CASCADE,
@@ -41,10 +45,16 @@ class Invitation(UUIDModel, InvitationMixin):
         related_name='invitations_got',
         verbose_name='recipient',
     )
-    invited_at = models.DateTimeField(_('date joined'), default=timezone.now, editable=False, )
+
+    def accept(self):
+        ProjectMember.objects.create(project=self.project, profile=self.recipient)
+        Invitation.objects.filter(project=self.project, recipient=self.recipient).delete()
+
+    def reject(self):
+        Invitation.objects.filter(project=self.project, recipient=self.recipient).delete()
 
 
-class InvitationLink(UUIDModel):
+class InvitationLink(BaseModel):
     class Meta:
         verbose_name = _('invitation link')
         verbose_name_plural = _('invitation links')
@@ -56,7 +66,6 @@ class InvitationLink(UUIDModel):
         verbose_name=_('creator'),
     )
 
-    created_at = models.DateTimeField(_('created at'), default=timezone.now, editable=False, )
     expire_at = models.DateTimeField(_('expire at'), blank=True, null=True, )
     uses_count = models.PositiveIntegerField(_('uses count'), default=0, editable=False, )
     max_uses_count = models.PositiveIntegerField(_('max uses count'), blank=True, null=True, )

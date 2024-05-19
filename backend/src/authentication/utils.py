@@ -15,14 +15,14 @@ SEPARATOR = 'SEPARATOR'
 
 
 def login(user, message, status) -> Response:
-    response = Response(data={'message': _(message)}, status=status)
+    response = Response(data={'success': _(message)}, status=status)
     access_token, refresh_token = JWTService.generate_tokens(user)
     response = set_token_cookies(response, access_token, refresh_token)
     return response
 
 
 def logout(message, status) -> Response:
-    response = Response(data={'message': _(message)}, status=status, )
+    response = Response(data={'success': _(message)}, status=status, )
     response.delete_cookie(key='access_token', )
     response.delete_cookie(key='refresh_token', )
     return response
@@ -71,13 +71,13 @@ def check_credentials(email, password) -> tuple[User, str | None] | tuple[None, 
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return None, 'Invalid credentials'
+        return None, 'Неверный логин или пароль.\nПожалуйста, проверьте введенные учетные данные.'
 
     if not user.check_password(raw_password=password):
-        return None, 'Invalid credentials'
+        return None, 'Неверный логин или пароль.'
 
     if not user.is_verified:
-        return None, 'Unverified'
+        return None, 'Неверный логин или пароль.'
 
     return user, None
 

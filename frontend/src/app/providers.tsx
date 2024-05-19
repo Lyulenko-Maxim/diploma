@@ -1,38 +1,59 @@
 "use client";
 import * as React from "react";
-import {NextUIProvider} from "@nextui-org/react";
+import {Card, CardBody, NextUIProvider, User} from "@nextui-org/react";
 import {ThemeProvider as NextThemesProvider, useTheme as useNextTheme} from "next-themes";
 import {ThemeProviderProps} from "next-themes/dist/types";
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {ReactQueryDevtools} from '@tanstack/react-query-devtools'
 import {useEffect, useState} from 'react'
-import {Toaster} from "sonner";
+import {toast, Toaster} from "sonner";
 import {useRouter} from "next/navigation";
 
-import {closeById} from "@/app/actions";
+import {onMessage} from "@firebase/messaging";
+import firebaseApp from "@/firebase/firebase";
+import useFcmToken from "@/firebase/useFcmToken";
+import {getMessaging} from "firebase/messaging";
+
 
 export interface ProvidersProps {
     children: React.ReactNode;
     themeProps?: ThemeProviderProps;
-    socketId: string;
 }
 
-export const Providers = ({children, themeProps, socketId}: ProvidersProps) => {
+export const Providers = ({children, themeProps}: ProvidersProps) => {
+    const {fcmToken, notificationPermissionStatus} = useFcmToken();
+    fcmToken && console.log('FCM token:', fcmToken);
+
     useEffect(() => {
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            const messaging = getMessaging(firebaseApp);
+            const unsubscribe = onMessage(messaging, (payload) => {
+                console.log('Foreground push notification received:', payload);
+                const data = payload.data;
+                if (data) {
+                    data.action = JSON.parse(data.action);
+                    data.task = JSON.parse(data.task);
+                    data.actor = JSON.parse(data.actor);
 
-        const closeWebSocket = async () => {
-            await closeById(socketId)
+                    toast.custom((t) => (
+                        <div className='shadow p-4 flex flex-col items-start gap-2'>
+                            <h1>{data.task["project"].name}</h1>
+                            <div className=''>
+                                <h5 className='text-sm'>{data.actor.profile.username}</h5>
+                                <h5>удалил(-а) задачу 5</h5>
+                            </div>
+                        </div>
+                    ));
+                } else {
+                    toast.success(payload.notification?.title)
+                }
 
+            });
+            return () => {
+                unsubscribe();
+            };
         }
-
-        window.addEventListener('beforeunload', closeWebSocket);
-
-        return () => {
-            //
-            // window.removeEventListener('beforeunload', closeWebSocket);
-        };
-
-    }, [socketId]);
+    }, []);
 
     const router = useRouter();
 
@@ -59,6 +80,8 @@ export const Providers = ({children, themeProps, socketId}: ProvidersProps) => {
                     <Toaster expand
                              visibleToasts={3}
                              richColors
+                             pauseWhenPageIsHidden={true}
+                             duration={15000}
                              position='bottom-right'
                              closeButton
                     />

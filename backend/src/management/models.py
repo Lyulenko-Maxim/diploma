@@ -2,35 +2,44 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
+from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
-from django.db.models import F, Q
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
-from slugify import slugify
 
+from src.shared.models import BaseModel
+from .managers import CommentManager, DashboardManager, DashboardProjectManager, GroupManager, MarkerManager, \
+    ProjectManager, ProjectMemberManager, StatusManager, TaskManager
 from .mixins import OrderableMixin
 from ..shared.constants import Color
-from ..shared.models import UUIDModel
 from ..users.models import Profile
 
 User = get_user_model()
 
+def project_photo_upload_to(instance, filename: str) -> str:
+    extension = filename.split('.')[-1]
+    return f'projects/{instance.id}/photo.{extension}'
 
-class Project(UUIDModel):
-    SLUG_PATTERN = r'[a-z0-9]+'
-    SLUG_MAX_LENGTH = 4
-
+class Project(BaseModel):
     class Meta:
         verbose_name = _('project')
         verbose_name_plural = _('projects')
-        unique_together = ('slug', 'owner')
+
+    objects = ProjectManager()
 
     name = models.CharField(_('name'), max_length=255)
-    slug = models.SlugField(_('slug'), max_length=SLUG_MAX_LENGTH + 2, editable=False, blank=True, null=True, )
     description = models.TextField(_('description'), null=True, blank=True, )
+    photo = models.ImageField(
+        _('photo'),
+        upload_to=project_photo_upload_to,
+        validators=[FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg'])],
+        blank=True,
+        null=True,
+    )
     owner = models.ForeignKey(
         to=Profile,
         on_delete=models.CASCADE,
@@ -42,58 +51,32 @@ class Project(UUIDModel):
         through='ProjectMember',
         verbose_name=_('members'),
     )
-    task_counter = models.PositiveIntegerField(_('counter'), default=0, editable=False, )
-    created_at = models.DateTimeField(_('created_at'), default=timezone.now, editable=False, )
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
             return super().save(*args, **kwargs)
 
-        self._initialize_project()
-        return super().save(*args, **kwargs)
+        with transaction.atomic():
+            self._initialize_project()
+            return super().save(*args, **kwargs)
 
     def _initialize_project(self):
-        with transaction.atomic():
-            self.slug = self._slugify()
-            admin = Group.objects.create(project=self, name='Administrator', order=0, color_hex='#FF0000', )
-            admin.permissions.set(Permission.objects.all())
-            member = Group.objects.create(
-                project=self,
-                name='Member',
-                order=1,
-                color_hex='#1AA744',
-                is_default=True,
-            )
+        admin = Group.objects.create(project=self, name='Администратор', order=0, color_hex='#FF0000', )
+        admin.permissions.set(Permission.objects.all())
+        member = Group.objects.create(
+            project=self,
+            name='Участник',
+            order=1,
+            color_hex='#1AA744',
+            is_default=True,
+        )
 
-            owner = ProjectMember.objects.create(project=self, profile=self.owner)
-            owner.groups.set([admin])
+        owner = ProjectMember.objects.create(project=self, profile=self.owner)
+        owner.groups.set([admin])
 
-            Status.objects.create(project=self, name='ToDo', category='todo', order=0, )
-            Status.objects.create(project=self, name='In progress', category='default', order=1, )
-            Status.objects.create(project=self, name='Completed', category='completed', order=2, )
-
-    def _create_base_slug(self):
-        slugged = slugify(self.name)
-        words = re.findall(self.SLUG_PATTERN, slugged)
-        if len(words) == 1:
-            return words[0][:self.SLUG_MAX_LENGTH].lower()
-        return ''.join(word[0] for word in words)[:self.SLUG_MAX_LENGTH].lower()
-
-    def _slugify(self):
-        base_slug = self._create_base_slug()
-        counter = 1
-        owner_filter = Q(owner=self.owner)
-        member_filter = Q(members=self.owner)
-
-        slug = base_slug
-        while True:
-            slug_filter = Q(slug=slug)
-            if not Project.objects.filter((owner_filter | member_filter) & slug_filter).exists():
-                break
-            slug = f'{base_slug}{counter}'
-            counter += 1
-
-        return slug
+        Status.objects.create(project=self, name='Сделать', category='todo', order=0, )
+        Status.objects.create(project=self, name='В процессе', category='default', order=1, )
+        Status.objects.create(project=self, name='Выполнено', category='completed', order=2, )
 
     def invite(self, email: str, sender: Profile) -> Response:
         from ..notifications.models import Invitation
@@ -109,13 +92,13 @@ class Project(UUIDModel):
 
         if Invitation.objects.filter(project=self, recipient=recipient_profile).exists():
             return Response(
-                data={'error': _('This user is already invited to the workspace')},
+                data={'error': _('Данный пользователь уже приглашен в текущий проект.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if ProjectMember.objects.filter(project=self, profile=recipient_profile).exists():
             return Response(
-                data={'error': _('This user is already a member of the workspace')},
+                data={'error': _('Данный пользователь уже является участником текущего проекта.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -124,10 +107,12 @@ class Project(UUIDModel):
         return Response(data={'success': _('Successfully invited')}, status=status.HTTP_200_OK)
 
 
-class Dashboard(UUIDModel):
+class Dashboard(BaseModel):
     class Meta:
         verbose_name = _('dashboard')
         verbose_name_plural = _('dashboards')
+
+    objects = DashboardManager()
 
     owner = models.OneToOneField(
         to=Profile,
@@ -143,12 +128,14 @@ class Dashboard(UUIDModel):
     )
 
 
-class DashboardProject(OrderableMixin, UUIDModel):
+class DashboardProject(OrderableMixin, BaseModel):
     class Meta:
         verbose_name = _('dashboard project')
         verbose_name_plural = _('dashboard projects')
         unique_together = ('dashboard', 'project',)
         ordering = ('order',)
+
+    objects = DashboardProjectManager()
 
     dashboard = models.ForeignKey(
         to=Dashboard,
@@ -168,22 +155,26 @@ class DashboardProject(OrderableMixin, UUIDModel):
         }
 
 
-class Permission(UUIDModel):
+class Permission(OrderableMixin, BaseModel):
     class Meta:
         verbose_name = _('permission')
         verbose_name_plural = _('permissions')
+        ordering = ('order',)
 
     name = models.CharField(_('name'), max_length=255, unique=True, )
     code = models.CharField(_('code'), max_length=255, unique=True, )
+    description = models.TextField(_('description'), blank=True, null=True)
 
     def __str__(self):
         return self.name
 
 
-class Group(OrderableMixin, UUIDModel):
+class Group(OrderableMixin, BaseModel):
     class Meta:
         verbose_name = _('group')
         verbose_name_plural = _('groups')
+
+    objects = GroupManager()
 
     name = models.CharField(_('name'), max_length=255, )
     color_hex = models.CharField(_('color HEX'), max_length=7, default=Color.WHITE_HEX, )
@@ -207,7 +198,7 @@ class Group(OrderableMixin, UUIDModel):
         return {'project': self.project, }
 
 
-class GroupPermission(UUIDModel):
+class GroupPermission(BaseModel):
     class Meta:
         verbose_name = _('group permission')
         verbose_name_plural = _('groups permissions')
@@ -217,11 +208,13 @@ class GroupPermission(UUIDModel):
     permission = models.ForeignKey(Permission, on_delete=models.CASCADE, verbose_name=_('permission'))
 
 
-class ProjectMember(UUIDModel):
+class ProjectMember(BaseModel):
     class Meta:
         verbose_name = _('project member')
         verbose_name_plural = _('project members')
         unique_together = ('project', 'profile',)
+
+    objects = ProjectMemberManager()
 
     project = models.ForeignKey(
         to=Project,
@@ -241,8 +234,19 @@ class ProjectMember(UUIDModel):
         related_name='members',
         verbose_name=_('groups'),
     )
-    date_joined = models.DateTimeField(_('date joined'), default=timezone.now, editable=False, )
     deactivated = models.BooleanField(_('deactivated'), default=False, )
+
+    @property
+    def permissions(self):
+        permissions = set()
+        groups = self.groups.prefetch_related('permissions').all()
+        for group in groups:
+            permissions.update(group.permissions.values_list('code', flat=True))
+        return permissions
+
+    @property
+    def highest_group(self):
+        return self.groups.all().order_by('order').first()
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
@@ -259,15 +263,8 @@ class ProjectMember(UUIDModel):
     def __str__(self):
         return f'{self.profile.username}'
 
-    def get_permissions(self):
-        permissions = set()
-        groups = self.groups.prefetch_related('permissions').all()
-        for group in groups:
-            permissions.update(group.permissions.all())
-        return permissions
 
-
-class ProjectMemberGroup(UUIDModel):
+class ProjectMemberGroup(BaseModel):
     class Meta:
         verbose_name = _('project member group')
         verbose_name_plural = _('project member groups')
@@ -277,11 +274,13 @@ class ProjectMemberGroup(UUIDModel):
     member = models.ForeignKey(ProjectMember, on_delete=models.CASCADE, verbose_name=_('member'))
 
 
-class Marker(OrderableMixin, UUIDModel):
+class Marker(BaseModel):
     class Meta:
         verbose_name = _('marker')
         verbose_name_plural = _('markers')
-        ordering = ('order',)
+        ordering = ('created_at',)
+
+    objects = MarkerManager()
 
     name = models.CharField(_('name'), max_length=255, )
     color_hex = models.CharField(max_length=7, default='#FFFFFF', )
@@ -299,12 +298,14 @@ class Marker(OrderableMixin, UUIDModel):
         return {'project': self.project, }
 
 
-class Status(OrderableMixin, UUIDModel):
+class Status(OrderableMixin, BaseModel):
     CATEGORY_CHOICES = [
         ('todo', 'To Do'),
         ('completed', 'Completed'),
         ('default', 'Default'),
     ]
+
+    objects = StatusManager()
 
     class Meta:
         verbose_name = _('status')
@@ -327,7 +328,7 @@ class Status(OrderableMixin, UUIDModel):
         return {'project': self.project, }
 
 
-class Task(OrderableMixin, UUIDModel):
+class Task(OrderableMixin, BaseModel):
     PRIORITY_CHOICES = [
         ('critical', 'Critical'),
         ('highest', 'Highest'),
@@ -340,16 +341,15 @@ class Task(OrderableMixin, UUIDModel):
     class Meta:
         verbose_name = _('task')
         verbose_name_plural = _('tasks')
-        unique_together = ('key', 'project',)
 
-    key = models.SlugField(_('key'), max_length=10, blank=True, null=True, editable=False, )
+    objects = TaskManager()
+
     title = models.CharField(_('title'), max_length=255, )
     description = models.TextField(_('description'), null=True, blank=True, )
     priority = models.CharField(_('priority'), max_length=10, choices=PRIORITY_CHOICES, default='medium', )
-    due_date = models.DateTimeField(_('due date'), default=None, null=True, blank=True, )
+    duration = models.PositiveIntegerField(_('duration'), null=True, blank=True, )
     start_date = models.DateField(_('start date'), blank=True, null=True)
     end_date = models.DateField(_('end date'), blank=True, null=True)
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True, )
     is_archived = models.BooleanField(_('is archived'), default=False, )
     project = models.ForeignKey(
         to=Project,
@@ -371,47 +371,66 @@ class Task(OrderableMixin, UUIDModel):
     )
     assignee = models.ForeignKey(
         to=ProjectMember,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
         related_name='assigned_tasks',
-        verbose_name=_('executors'),
+        verbose_name=_('assignee'),
     )
     markers = models.ManyToManyField(
         to=Marker,
         through='TaskMarker',
+        blank=True,
+        default=[],
         verbose_name=_('markers'),
     )
-    parent = models.ForeignKey(
-        to='self',
-        on_delete=models.CASCADE,
-        related_name='subtasks',
-        null=True,
-        blank=True
-    )
+    # parent = models.ForeignKey(
+    #     to='self',
+    #     on_delete=models.CASCADE,
+    #     related_name='subtasks',
+    #     null=True,
+    #     blank=True,
+    #     default=None,
+    # )
     dependencies = models.ManyToManyField(
         to='self',
         symmetrical=False,
         through='TaskDependency',
         blank=True,
+        default=[],
         verbose_name=_('dependencies'),
     )
+    subscribers = models.ManyToManyField(
+        to=ProjectMember,
+        through='TaskSubscriber',
+        related_name='subscriptions',
+        blank=True,
+        verbose_name=_('subscribers'),
+    )
+
+    @property
+    def valid_dependencies(self):
+        visited = self.dfs()
+        return Task.objects.filter(project=self.project).exclude(Q(pk__in=[task.pk for task in visited])).distinct()
+
+    @property
+    def available_dependencies(self):
+        return self.valid_dependencies.exclude(Q(pk__in=[task.pk for task in self.dependencies.all()])).distinct()
 
     def __str__(self):
-        return f'{self.key}'
+        return f'{self.title}'
 
     def save(self, *args, **kwargs):
         with transaction.atomic():
-            if self._state.adding:
-                self.project.task_counter += 1
-                self.project.save(update_fields=['task_counter'])
-                self._slugify()
-
-            if not self.parent or self.parent in self.dependencies.all():
-                return super().save(*args, **kwargs)
-
-            if self._is_cyclic_dependency(self.parent):
-                raise ValidationError({'error': _('Cyclic dependencies are not allowed.')})
-
-            TaskDependency.objects.create(from_task=self.parent, to_task=self)
+            #
+            # if not self.parent or self.parent in self.dependencies.all():
+            #     return super().save(*args, **kwargs)
+            #
+            # if self._is_cyclic_dependency(self.parent):
+            #     raise ValidationError('Задачи не должны образовывать циклическую зависимость.')
+            #
+            # TaskDependency.objects.create(from_task=self.parent, to_task=self)
             return super().save(*args, **kwargs)
 
     def _is_cyclic_dependency(self, new_task):
@@ -445,26 +464,6 @@ class Task(OrderableMixin, UUIDModel):
 
         return visited
 
-    def valid_dependencies(self):
-        visited = self.dfs()
-        return Task.objects.filter(project=self.project).exclude(Q(pk__in=[task.pk for task in visited])).distinct()
-
-    def available_dependencies(self):
-        return self.valid_dependencies().exclude(Q(pk__in=[task.pk for task in self.dependencies.all()])).distinct()
-
-    def _slugify(self):
-        self.key = f'{self.project.slug}-{self.project.task_counter}'
-
-    @classmethod
-    def bulk_update_status(cls, current_status: Status, new_status: Status):
-        tasks = current_status.tasks.all()
-        tasks_to_update = []
-        for task in tasks:
-            task.status = new_status
-            tasks_to_update.append(task)
-
-        cls.objects.bulk_update(tasks_to_update, ['status'])
-
     def get_order_filter_fields(self):
         return {
             'project': self.project,
@@ -472,7 +471,25 @@ class Task(OrderableMixin, UUIDModel):
         }
 
 
-class TaskDependency(UUIDModel):
+class TaskSubscriber(BaseModel):
+    class Meta:
+        verbose_name = _('task subscriber')
+        verbose_name_plural = _('tasks subscribers')
+        unique_together = ('task', 'subscriber')
+
+    task = models.ForeignKey(
+        to=Task,
+        on_delete=models.CASCADE,
+        verbose_name=_('subscribers'),
+    )
+    subscriber = models.ForeignKey(
+        to=ProjectMember,
+        on_delete=models.CASCADE,
+        verbose_name=_('subscriber'),
+    )
+
+
+class TaskDependency(BaseModel):
     class Meta:
         verbose_name = _('task dependency')
         verbose_name_plural = _('tasks dependencies')
@@ -492,11 +509,12 @@ class TaskDependency(UUIDModel):
     )
 
 
-class TaskMarker(UUIDModel):
+class TaskMarker(BaseModel):
     class Meta:
         verbose_name = _('task marker')
         verbose_name_plural = _('tasks markers')
         unique_together = ('task', 'marker',)
+        ordering = ('-created_at',)
 
     marker = models.ForeignKey(
         to=Marker,
@@ -509,15 +527,15 @@ class TaskMarker(UUIDModel):
         on_delete=models.CASCADE,
         verbose_name=_('task'),
     )
-    added_at = models.DateTimeField(auto_now_add=True, editable=False, )
 
 
-class Comment(UUIDModel):
+class Comment(BaseModel):
     class Meta:
         verbose_name = _('comment')
         verbose_name_plural = _('comments')
         ordering = ('-created_at',)
 
+    objects = CommentManager()
     content = models.TextField(_('content'), )
     owner = models.ForeignKey(
         to=ProjectMember,
@@ -532,8 +550,6 @@ class Comment(UUIDModel):
         related_name='comments',
         verbose_name=_('task'),
     )
-    created_at = models.DateTimeField(_('created at'), default=timezone.now, editable=False, )
-    last_edit = models.DateTimeField(_('last edit'), null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self._state.adding:

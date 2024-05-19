@@ -29,7 +29,11 @@ class JWTRefreshMiddleware:
 
         # Если refresh-токен истек, отдаем ошибку авторизации
         if JWTService.is_expired(refresh_token):
-            return self.remove_tokens_and_set_error_response(request=request, error_message='Token is expired.')
+            return self.remove_tokens_and_set_error_response(
+                request=request,
+                error_message='Время вашей сессии истекло.'
+                              '\n Требуется повторная авторизация.'
+            )
 
         # Пробуем обновить, если access истек, а refresh нет
         try:
@@ -40,7 +44,10 @@ class JWTRefreshMiddleware:
 
         # Если не удалось обновить, отдаем ошибку авторизации
         except (jwt.InvalidTokenError, KeyError, User.DoesNotExist):
-            return self.remove_tokens_and_set_error_response(request=request, error_message='Invalid token.')
+            return self.remove_tokens_and_set_error_response(
+                request=request,
+                error_message='Невалидный токен авторизации.'
+                              '\nТребуется авторизация.')
 
         # Создаем новые токены
         new_access_token, new_refresh_token = JWTService.generate_tokens(user=user)

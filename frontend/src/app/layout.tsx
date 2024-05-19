@@ -19,7 +19,7 @@ export default async function RootLayout({children,}: {
     return (
         <html lang="en">
         <body className={clsx("font-sans antialiased", fontSans.className)}>
-        <Providers socketId={id}>
+        <Providers>
             {children}
         </Providers>
         </body>

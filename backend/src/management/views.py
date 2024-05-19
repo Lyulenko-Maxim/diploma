@@ -1,345 +1,473 @@
+import json
+
 from django.db import transaction
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from rest_framework import mixins, status, viewsets
+from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import GenericAPIView, get_object_or_404
+from rest_framework.mixins import UpdateModelMixin
 from rest_framework.response import Response
-from ..shared.serializers import EmailSerializer, EmptySerializer
-from ..users.models import Profile
-from . import permissions
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
+
 from .models import (
-    Comment,
-    Dashboard,
-    DashboardProject,
-    Group,
-    Marker,
-    Project,
-    ProjectMember,
-    Status,
-    Task,
+    Comment, Dashboard, DashboardProject, Group, Marker,
+    Project, ProjectMember, Status, Task, TaskSubscriber,
 )
-from .serializers import (
-    CommentSerializer,
-    DashboardProjectSerializer,
-    DashboardSerializer,
-    GroupListSerializer, GroupSerializer,
-    MarkerSerializer,
-    ProjectListSerializer, ProjectMemberAssignSerializer, ProjectMemberListSerializer, ProjectMemberSerializer,
-    ProjectSerializer,
-    RTaskSerializer,
-    StatusSerializer,
+from .permissions import (
+    IsCommentCreator, IsCommentManager, IsCommentOwner, IsGroupManager,
+    IsInvitationCreator, IsMarkerManager, IsMemberManager, IsProjectManager,
+    IsProjectMember, IsProjectOwner, IsStatusManager, IsTaskManager
 )
+from .serializers import *
+from ..notifications.tasks import notify_subscribers
+from ..notifications.models import Notification
+from ..shared.serializers import EmailSerializer, EmptySerializer
+from ..users.permissions import IsAuthenticated
 
 
-class DashboardViewSetMixin(viewsets.GenericViewSet):
-    def get_current_profile(self):
-        profile: Profile = self.request.user.profile
-        return profile
-
-
-class ProjectViewSetMixin(viewsets.GenericViewSet):
-    def get_current_profile(self):
-        profile: Profile = self.request.user.profile
-        return profile
-
-    def get_current_dashboard(self):
-        profile = self.get_current_profile()
-        dashboard: Dashboard = get_object_or_404(Dashboard, owner=profile)
-        return dashboard
-
-    def get_current_project_or_404(self):
-        dashboard = self.get_current_dashboard()
-        project: Project = get_object_or_404(Project.objects.filter(
-            Q(pk=self.kwargs.get('project_pk'))
-            & (Q(dashboards__dashboard=dashboard))
-        ).distinct())
-        return project
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-
-        context['project_pk'] = self.kwargs.get('project_pk')
-        context['instance'] = self.get_queryset().filter(pk=self.kwargs.get('pk')).first()
-        return context
-
-
-class DashboardViewSet(DashboardViewSetMixin):
-    serializer_class = DashboardSerializer
-    queryset = Dashboard.objects
+class MapMixin(GenericAPIView):
+    action_permissions_map = {}
+    action_serializers_map = {}
 
     def get_serializer_class(self):
-        if self.action == 'move':
-            self.serializer_class = DashboardProjectSerializer
-        else:
-            self.serializer_class = DashboardSerializer
+        view_action = self.action
+        serializer_class = self.action_serializers_map.get(view_action)
+
+        if serializer_class:
+
+            return serializer_class
         return super().get_serializer_class()
 
-    @action(detail=False, methods=['get'], url_path='dashboard')
-    def dashboard(self, request, *args, **kwargs):
-        profile = self.get_current_profile()
-        dashboard: Dashboard = get_object_or_404(Dashboard, owner=profile)
+    def get_permissions(self):
+        view_action = self.action
+        perm_classes = self.action_permissions_map.get(view_action)
+        if perm_classes:
+            return [permission() for permission in perm_classes]
+        return super().get_permissions()
+
+
+# class ProjectViewSetMixin(CurrentProfileViewSetMixin, viewsets.GenericViewSet):
+#
+#
+#     def get_serializer_context(self):
+#         context = super().get_serializer_context()
+#         context['project_pk'] = self.kwargs.get('project_pk')
+#         context['instance'] = self.get_queryset().filter(pk=self.kwargs.get('pk')).first()
+#         return context
+
+
+class DashboardViewSet(GenericAPIView):
+    queryset = Dashboard.objects
+    serializer_class = DashboardDetailSerializer
+
+    def get(self, request, *args, **kwargs):
+        dashboard = Dashboard.objects.current(request=request)
         serializer = self.get_serializer(dashboard)
         return Response(data=serializer.data, status=status.HTTP_200_OK, )
 
 
-class ProjectViewSet(ProjectViewSetMixin, viewsets.ModelViewSet):
+class ProjectViewSet(MapMixin, ModelViewSet):
+    action_serializers_map = dict(
+        list=ProjectListSerializer,
+        retrieve=ProjectListSerializer,
+        create=ProjectCreateSerializer,
+        update=ProjectCreateSerializer,
+        partial_update=ProjectCreateSerializer,
+        invite=EmailSerializer,
+        move=DashboardProjectMoveSerializer
+    )
+
+    action_permissions_map = dict(
+        list=[IsAuthenticated],
+        create=[IsAuthenticated],
+        retrieve=[IsAuthenticated, IsProjectMember],
+        update=[IsAuthenticated & IsProjectMember & IsProjectManager],
+        partial_update=[IsAuthenticated & IsProjectMember & IsProjectManager],
+        destroy=[IsAuthenticated & IsProjectOwner],
+        invite=[IsAuthenticated & IsProjectMember & IsInvitationCreator],
+        move=[IsAuthenticated]
+    )
+
     def get_queryset(self):
-        dashboard = self.get_current_dashboard()
-        return Project.objects.filter(dashboards__dashboard=dashboard).distinct()
+        return Project.objects.filter(members__user=self.request.user)
 
-    def get_serializer_class(self):
-        if self.action in ('list',):
-            self.serializer_class = ProjectListSerializer
-        elif self.action in ('invite',):
-            self.serializer_class = EmailSerializer
-        elif self.action in ('move',):
-            self.serializer_class = DashboardProjectSerializer
-        else:
-            self.serializer_class = ProjectSerializer
-        return super().get_serializer_class()
-
-    def get_permissions(self):
-        if self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanUpdateProject]
-        elif self.action in ('destroy',):
-            self.permission_classes = [IsAuthenticated, permissions.CanDeleteProject]
-        elif self.action in ('invite',):
-            self.permission_classes = [IsAuthenticated, permissions.CanInviteMember]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
+    # def get_object(self):
+    #     project = Project.objects.current_or_404(pk=self.kwargs.get('pk'), request=self.request)
+    #     self.check_object_permissions(self.request, project)
+    #     return project
 
     def perform_create(self, serializer):
-        with transaction.atomic():
-            profile = self.get_current_profile()
-            serializer.save(owner=profile)
+        serializer.save(owner=self.request.user.profile)
 
     @action(detail=True, methods=['put'], url_path='move')
     def move(self, request, *args, **kwargs):
-        profile = self.get_current_profile()
-        project: Project = self.get_object()
-        dashboard: Dashboard = get_object_or_404(Dashboard, owner=profile)
-        serializer = self.get_serializer(data=request.data)
+        dashboard_project = DashboardProject.objects.current_or_404(
+            project_pk=self.kwargs.get('pk'),
+            request=self.request,
+        )
+        serializer = self.get_serializer(instance=dashboard_project, data=request.data)
         serializer.is_valid(raise_exception=True)
-        dp = get_object_or_404(DashboardProject, project=project, dashboard=dashboard)
-        dp.order = serializer.validated_data['order']
-        dp.save()
+        serializer.save()
         return Response(data={'success': 'Moved'}, status=status.HTTP_200_OK, )
 
+    @transaction.atomic
     @action(detail=True, methods=['post', ], url_path='invite')
     def invite(self, request, *args, **kwargs):
-        with transaction.atomic():
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            recipient_email = serializer.validated_data['email']
-            project: Project = self.get_object()
-            sender_profile: Profile = request.user.profile
-            response = project.invite(email=recipient_email, sender=sender_profile)
-            return response
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        recipient_email = serializer.validated_data['email']
+        project = self.get_object()
+        sender_profile = request.user.profile
+        response = project.invite(email=recipient_email, sender=sender_profile)
+        return response
 
 
-class ProjectMemberViewSet(ProjectViewSetMixin, mixins.UpdateModelMixin, viewsets.ReadOnlyModelViewSet):
+class ProjectMemberViewSet(MapMixin, UpdateModelMixin, ReadOnlyModelViewSet):
+    action_serializers_map = dict(
+        list=MemberListSerializer,
+        retrieve=MemberDetailSerializer,
+        update=MemberUpdateSerializer,
+        partial_update=MemberUpdateSerializer,
+        current=MemberCurrentSerializer,
+        expel=EmailSerializer,
+    )
+    action_permissions_map = dict(
+        list=[IsAuthenticated & IsProjectMember],
+        retrieve=[IsAuthenticated & IsProjectMember],
+        update=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        partial_update=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        expel=[IsAuthenticated & IsMemberManager],
+        deactivate=[IsAuthenticated & IsMemberManager],
+        current=[IsAuthenticated & IsProjectMember]
+    )
+
     def get_queryset(self):
-        project = self.get_current_project_or_404()
-        return ProjectMember.objects.filter(Q(project=project))
+        project = Project.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
+        return ProjectMember.objects.filter(project=project)
 
-    def get_serializer_class(self):
-        if self.action in ('list',):
-            self.serializer_class = ProjectMemberListSerializer
-        elif self.action in ('update', 'partial_update',):
-            self.serializer_class = ProjectMemberAssignSerializer
-        else:
-            self.serializer_class = ProjectMemberSerializer
-        return super().get_serializer_class()
+    def get_object(self):
+        member = ProjectMember.objects.current_or_404(
+            pk=self.kwargs.get('pk'),
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request,
+        )
+        self.check_object_permissions(self.request, member)
+        return member
 
-    def get_permissions(self):
-        if self.action in ('expel',):
-            self.permission_classes = [IsAuthenticated, permissions.CanExpelMember]
-        elif self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanAssignGroup]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
+    @action(detail=False, methods=['get', ], url_path='current', )
+    def current(self, request, *args, **kwargs):
+        current_member = ProjectMember.objects.current_or_404(
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request,
+            profile__user=self.request.user
+        )
+        serializer = self.get_serializer(instance=current_member)
+        return Response(data=serializer.data)
 
-    @action(detail=True, methods=['post', ], url_path='expel', serializer_class=EmptySerializer)
+    @transaction.atomic
+    @action(detail=True, methods=['post', ], url_path='expel', )
     def expel(self, request, *args, **kwargs):
-        with transaction.atomic():
-            member: ProjectMember = self.get_object()
+        member: ProjectMember = self.get_object()
+        if member.profile == member.project.owner:
+            raise PermissionDenied('Нельзя исключить управляющего проектом.')
 
-            if member.profile == member.project.owner:
-                return Response(data={'error': _('Permission denied')}, status=status.HTTP_403_FORBIDDEN)
+        member.delete()
+        return Response(data={'success': _('Участник успешно исключен из проекта.')})
 
-            member.delete()
-            return Response(data={'success': _('Successfully expelled')}, status=status.HTTP_200_OK)
-
+    @transaction.atomic
     @action(detail=True, methods=['post', ], url_path='deactivate', serializer_class=EmptySerializer)
     def deactivate(self, request, *args, **kwargs):
-        with transaction.atomic():
-            member: ProjectMember = self.get_object()
+        member: ProjectMember = self.get_object()
+        if member.profile == member.project.owner:
+            raise PermissionDenied('Нельзя отключить управляющего проектом.')
 
-            if member.profile == member.project.owner:
-                return Response(data={'error': _('Permission denied')}, status=status.HTTP_403_FORBIDDEN)
-
-            member.deactivated = True
-            member.save()
-            return Response(data={'success': _('Successfully deactivated')}, status=status.HTTP_200_OK)
-
-    # @action(detail=True, methods=['put', ], url_path='assign-group', serializer_class=ProjectMemberSerializer)
-    # def assign_group(self, request, *args, **kwargs):
-    #     with transaction.atomic():
-    #         member: ProjectMember = self.get_object()
-    #
-    #         if member.profile == member.project.owner:
-    #             return Response(data={'error': _('Permission denied')}, status=status.HTTP_403_FORBIDDEN)
-    #
-    #         member.deactivated = True
-    #         member.save()
-    #         return Response(data={'success': _('Successfully deactivated')}, status=status.HTTP_200_OK)
+        member.deactivated = True
+        member.save()
+        return Response(data={'success': _('Участник успешно отключен.')})
 
 
-class StatusViewSet(ProjectViewSetMixin, viewsets.ModelViewSet):
-    serializer_class = StatusSerializer
+class StatusViewSet(MapMixin, ModelViewSet):
+    action_serializers_map = dict(
+        list=StatusListSerializer,
+        retrieve=StatusListSerializer,
+        create=StatusCreateSerializer,
+        update=StatusCreateSerializer,
+        partial_update=StatusCreateSerializer,
+        move=StatusMoveSerializer,
+    )
+    action_permissions_map = dict(
+        list=[IsAuthenticated & IsProjectMember],
+        retrieve=[IsAuthenticated & IsProjectMember],
+        create=[IsAuthenticated & IsProjectMember & IsStatusManager],
+        update=[IsAuthenticated & IsProjectMember & IsStatusManager],
+        partial_update=[IsAuthenticated & IsProjectMember & IsStatusManager],
+        destroy=[IsAuthenticated & IsProjectMember & IsStatusManager],
+        move=[IsAuthenticated & IsStatusManager]
+    )
 
     def get_queryset(self):
-        return Status.objects.filter(Q(project=self.get_current_project_or_404())).order_by('order')
+        project = Project.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
+        return Status.objects.filter(Q(project=project)).order_by('order')
 
-    def get_permissions(self):
-        if self.action in ('create',):
-            self.permission_classes = [IsAuthenticated, permissions.CanCreateStatus]
-        elif self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanUpdateStatus]
-        elif self.action in ('destroy',):
-            self.permission_classes = [IsAuthenticated, permissions.CanDeleteStatus]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
+    def get_object(self):
+        status_ = Status.objects.current_or_404(
+            pk=self.kwargs.get('pk'),
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request
+        )
+        self.check_object_permissions(self.request, status_)
+        return status_
 
     def perform_create(self, serializer):
-        project = self.get_current_project_or_404()
-        data = serializer.validated_data
-        category = data.get('category')
+        project = Project.objects.current_or_404(
+            pk=self.kwargs.get('project_pk'),
+            request=self.request,
+        )
+        category = serializer.validated_data.get('category')
+        if category == 'default':
+            serializer.save(project=project)
+            return
 
-        if not category == 'default':
+        with transaction.atomic():
             current_status = Status.objects.filter(project=project, category=category).first()
-            status_ = serializer.save(project=project)
-            with transaction.atomic():
-                if not current_status:
-                    return
+            new_status = serializer.save(project=project)
 
-                current_status.category = 'default'
-                current_status.save()
-                Task.bulk_update_status(current_status=current_status, new_status=status_)
+            if not current_status:
                 return
 
+            current_status.category = 'default'
+            current_status.save()
+            Task.objects.bulk_update_status(current_status=current_status, new_status=new_status)
+
+    @action(detail=True, methods=['put'], url_path='move')
+    def move(self, request, *args, **kwargs):
+        instance: Status = self.get_object()
+        serializer = self.get_serializer(instance=instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+
+        return Response(data={'success': 'Moved'}, status=status.HTTP_200_OK, )
+
+
+class MarkerViewSet(MapMixin, ModelViewSet):
+    action_serializers_map = dict(
+        list=MarkerListSerializer,
+        retrieve=MarkerListSerializer,
+        create=MarkerCreateSerializer,
+        update=MarkerCreateSerializer,
+        partial_update=MarkerCreateSerializer,
+    )
+    action_permissions_map = dict(
+        list=[IsAuthenticated & IsProjectMember],
+        retrieve=[IsAuthenticated & IsProjectMember],
+        create=[IsAuthenticated & IsProjectMember & IsMarkerManager],
+        update=[IsAuthenticated & IsProjectMember & IsMarkerManager],
+        partial_update=[IsAuthenticated & IsProjectMember & IsMarkerManager],
+        destroy=[IsAuthenticated & IsProjectMember & IsMarkerManager]
+    )
+
+    def get_queryset(self):
+        project = Project.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
+        return Marker.objects.filter(project=project).order_by('order')
+
+    def get_object(self):
+        marker = Marker.objects.current_or_404(
+            pk=self.kwargs.get('pk'),
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request
+        )
+        self.check_object_permissions(self.request, marker)
+        return marker
+
+    def perform_create(self, serializer):
+        project = Project.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
         serializer.save(project=project)
 
 
-class MarkerViewSet(ProjectViewSetMixin, viewsets.ModelViewSet):
-    serializer_class = MarkerSerializer
+class GroupViewSet(MapMixin, ModelViewSet):
+    action_serializers_map = dict(
+        list=GroupListSerializer,
+        retrieve=GroupDetailSerializer,
+        create=GroupCreateSerializer,
+        update=GroupCreateSerializer,
+        partial_update=GroupCreateSerializer,
+        move=GroupMoveSerializer,
+    )
+    action_permissions_map = dict(
+        list=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        retrieve=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        create=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        update=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        partial_update=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        destroy=[IsAuthenticated & IsProjectMember & IsGroupManager],
+        move=[IsAuthenticated & IsProjectMember & IsGroupManager]
+    )
 
     def get_queryset(self):
-        project = self.get_current_project_or_404()
-        return Marker.objects.filter(Q(project=project)).order_by('order')
-
-    def get_permissions(self):
-        if self.action in ('create',):
-            self.permission_classes = [IsAuthenticated, permissions.CanCreateMarker]
-        elif self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanUpdateMarker]
-        elif self.action in ('destroy',):
-            self.permission_classes = [IsAuthenticated, permissions.CanDeleteMarker]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
+        return Group.objects.filter(project__pk=self.kwargs.get('project_pk')).order_by('order')
 
     def perform_create(self, serializer):
-        project = self.get_current_project_or_404()
+        project = get_object_or_404(Project, pk=self.kwargs.get('project_pk'))
         serializer.save(project=project)
 
+    @action(detail=True, methods=['put'], url_path='move')
+    def move(self, request, *args, **kwargs):
+        group: Group = self.get_object()
+        current_member: ProjectMember = ProjectMember.objects.current_or_404(
+            pk=self.kwargs.get('project_pk'),
+            request=self.request
+        )
+        first_group_order = current_member.groups.values_list('order', flat=True).order_by('order').first()
 
-class GroupViewSet(ProjectViewSetMixin, viewsets.ModelViewSet):
-    def get_queryset(self):
-        project = self.get_current_project_or_404()
-        return Group.objects.filter(Q(project=project)).order_by('order')
+        if group.order >= first_group_order and current_member.profile != group.project.owner:
+            raise PermissionDenied(
+                'Группа заблокирована, потому что эта группа выше, чем ваша самая высокая группа или является ею.'
+                '\nПожалуйста, обратитесь за помощью к владельцу более высокой группы или к руководителю проекта.'
+            )
 
-    def get_serializer_class(self):
-        if self.action in ('list',):
-            self.serializer_class = GroupListSerializer
-        else:
-            self.serializer_class = GroupSerializer
-        return super().get_serializer_class()
+        serializer = self.get_serializer(instance=group, data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-    def get_permissions(self):
-        if self.action in ('retrieve', 'list',):
-            self.permission_classes = [IsAuthenticated, permissions.CanViewGroup]
-        elif self.action in ('create',):
-            self.permission_classes = [IsAuthenticated, permissions.CanCreateGroup]
-        elif self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanUpdateGroup]
-        elif self.action in ('destroy',):
-            self.permission_classes = [IsAuthenticated, permissions.CanDeleteGroup]
-        elif self.action in ('assign',):
-            self.permission_classes = [IsAuthenticated, permissions.CanAssignGroup]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
+        if serializer.validated_data['order'] >= first_group_order and current_member.profile != group.project.owner:
+            raise PermissionDenied(
+                'Вы не можете переместить группу выше вашей самой высокой группы.'
+                '\nПожалуйста, обратитесь за помощью к владельцу более высокой группы или к руководителю проекта.'
+            )
 
-    def perform_create(self, serializer):
-        project = self.get_current_project_or_404()
-        serializer.save(project=project)
+        serializer.save()
 
+        if getattr(group, '_prefetched_objects_cache', None):
+            group._prefetched_objects_cache = {}
 
-class TaskViewSet(ProjectViewSetMixin, viewsets.ModelViewSet):
-    serializer_class = RTaskSerializer
-
-    def get_queryset(self):
-        project = self.get_current_project_or_404()
-        return Task.objects.filter(Q(project=project))
-
-    def get_permissions(self):
-        if self.action in ('create',):
-            self.permission_classes = [IsAuthenticated, permissions.CanCreateTask]
-        elif self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanUpdateTask]
-        elif self.action in ('destroy',):
-            self.permission_classes = [IsAuthenticated, permissions.CanDeleteTask]
-        elif self.action in ('assign',):
-            self.permission_classes = [IsAuthenticated, permissions.CanAssignTask]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
-
-    def perform_create(self, serializer):
-        profile = self.get_current_profile()
-        project = self.get_current_project_or_404()
-        member = get_object_or_404(ProjectMember, project=project, profile=profile)
-        serializer.save(author=member, project=project)
+        return Response(data={'success': 'Moved'}, )
 
 
-class CommentViewSet(ProjectViewSetMixin, viewsets.ModelViewSet):
-    serializer_class = CommentSerializer
+class TaskViewSet(MapMixin, ModelViewSet):
+    action_serializers_map = dict(
+        list=TaskListSerializer,
+        retrieve=TaskDetailSerializer,
+        create=TaskCreateSerializer,
+        update=TaskCreateSerializer,
+        partial_update=TaskCreateSerializer,
+        move=TaskMoveSerializer,
+        subscribe=EmptySerializer,
+        unsubscribe=EmptySerializer,
+    )
+    action_permissions_map = dict(
+        list=[IsAuthenticated & IsProjectMember],
+        retrieve=[IsAuthenticated & IsProjectMember],
+        create=[IsAuthenticated & IsProjectMember & IsTaskManager],
+        update=[IsAuthenticated & IsProjectMember & IsTaskManager],
+        partial_update=[IsAuthenticated & IsProjectMember & IsTaskManager],
+        destroy=[IsAuthenticated & IsProjectMember & IsTaskManager],
+        move=[IsAuthenticated & IsProjectMember],
+        subscribe=[IsAuthenticated & IsProjectMember],
+        unsubscribe=[IsAuthenticated & IsProjectMember],
+    )
 
     def get_queryset(self):
-        project = self.get_current_project_or_404()
-        task = get_object_or_404(Task, pk=self.kwargs.get('task_pk'), project=project)
-        return Comment.objects.filter(Q(task=task))
+        return Task.objects.filter(project__pk=self.kwargs.get('project_pk')).order_by('order')
 
-    def get_permissions(self):
-        if self.action in ('create',):
-            self.permission_classes = [IsAuthenticated, permissions.CanCreateComment]
-        elif self.action in ('update', 'partial_update',):
-            self.permission_classes = [IsAuthenticated, permissions.CanUpdateComment]
-        elif self.action in ('destroy',):
-            self.permission_classes = [IsAuthenticated, permissions.CanDeleteComment]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['project_pk'] = self.kwargs.get('project_pk')
+        context['instance'] = self.get_queryset().filter(pk=self.kwargs.get('pk')).first()
+        return context
 
     def perform_create(self, serializer):
-        profile = self.get_current_profile()
-        project = self.get_current_project_or_404()
-        member = get_object_or_404(ProjectMember, project=project, profile=profile)
-        task = get_object_or_404(Task, pk=self.kwargs.get('task_pk'), project=project)
-        serializer.save(owner=member, task=task)
+        project = Project.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
+        current_member = ProjectMember.objects.current_or_404(
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request,
+            profile__user=self.request.user
+        )
+        serializer.save(author=current_member, project=project)
+
+    @transaction.atomic()
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        task_data = TaskNotificationSerializer(instance=instance).data
+        actor = ProjectMember.objects.current_or_none(project_pk=self.kwargs.get('project_pk'), request=self.request)
+        actor_data = MemberDetailSerializer(instance=actor).data
+        data = dict(
+            action='task_deleted',
+            task=task_data,
+            actor=actor_data,
+        )
+        notify_subscribers.delay(data=data)
+        return Response(data={'success': 'Задача успешно удалена.'}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['put'], url_path='move')
+    def move(self, request, *args, **kwargs):
+        response = self.partial_update(request, *args, **kwargs)
+        response.data = {'success': 'Задача успешно перемещена'}
+        return response
+
+    @action(detail=True, methods=['post'], url_path='subscribe')
+    def subscribe(self, request, *args, **kwargs):
+        task: Task = self.get_object()
+        member = ProjectMember.objects.current_or_404(project_pk=self.kwargs.get('project_pk'), request=self.request)
+        subscription, created = TaskSubscriber.objects.get_or_create(task=task, subscriber=member)
+        if created:
+            return Response(data={'success': 'Вы успешно подписались на обновления задачи.'})
+        return Response({'message': 'Вы уже подписаны на обновления этой задачи.'}, status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='unsubscribe')
+    def unsubscribe(self, request, *args, **kwargs):
+        task: Task = self.get_object()
+        member = ProjectMember.objects.current_or_404(project_pk=self.kwargs.get('project_pk'), request=self.request)
+        subscription = TaskSubscriber.objects.filter(task=task, subscriber=member).first()
+        if not subscription:
+            return Response({'message': 'Вы не подписаны на обновления этой задачи.'}, status.HTTP_400_BAD_REQUEST)
+
+        subscription.delete()
+        return Response({'success': 'Вы успешно отписались от обновлений этой задачи.'})
+
+
+class CommentViewSet(ModelViewSet):
+    action_serializers_map = dict(
+        list=CommentListSerializer,
+        retrieve=CommentListSerializer,
+        create=CommentCreateSerializer,
+        update=CommentCreateSerializer,
+        partial_update=CommentCreateSerializer,
+    )
+    action_permissions_map = dict(
+        list=[IsAuthenticated & IsProjectMember],
+        retrieve=[IsAuthenticated & IsProjectMember],
+        create=[IsAuthenticated & IsProjectMember & IsCommentCreator],
+        update=[IsAuthenticated & IsProjectMember & IsCommentOwner],
+        partial_update=[IsAuthenticated & IsProjectMember & IsCommentOwner],
+        destroy=[IsAuthenticated & IsProjectMember & (IsCommentOwner | IsCommentManager)]
+    )
+
+    def get_queryset(self):
+        task = Task.objects.current_or_404(
+            pk=self.kwargs.get('task_pk'),
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request
+        )
+        return Comment.objects.filter(task=task, )
+
+    def get_object(self):
+        comment = Comment.objects.current_or_404(
+            pk=self.kwargs.get('pk'),
+            project_pk=self.kwargs.get('project_pk'),
+            task_pk=self.kwargs.get('task_pk'),
+            request=self.request
+        )
+        self.check_object_permissions(self.request, comment)
+        return comment
+
+    def perform_create(self, serializer):
+        task = Task.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
+        current_member = ProjectMember.objects.current_or_404(
+            project_pk=self.kwargs.get('project_pk'),
+            request=self.request,
+            profile__user=self.request.user,
+        )
+        serializer.save(owner=current_member, task=task)

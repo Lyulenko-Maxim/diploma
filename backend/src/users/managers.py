@@ -1,7 +1,8 @@
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.hashers import make_password
-from django.db import transaction
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
+from rest_framework.request import Request
 
 
 class UserManager(BaseUserManager):
@@ -14,15 +15,15 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_user(self, email=None, password=None, **extra_fields):
+    def create_user(self, email=None, username=None, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
         with transaction.atomic():
             user = self._create_user(email, password, **extra_fields)
-            self._initialize(user=user)
+            self._initialize(user=user, username=username)
             return user
 
-    def create_superuser(self, email=None, password=None, **extra_fields):
+    def create_superuser(self, email=None, username=None, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -35,13 +36,18 @@ class UserManager(BaseUserManager):
 
         with transaction.atomic():
             superuser = self._create_user(email, password, **extra_fields)
-            self._initialize(user=superuser)
+            self._initialize(user=superuser, username=username)
             return superuser
 
     @staticmethod
-    def _initialize(user):
+    def _initialize(user, username):
         from .models import Profile
         from ..management.models import Dashboard
 
-        profile, created = Profile.objects.get_or_create(user=user)
-        dashboard = Dashboard.objects.get_or_create(owner=profile)
+        profile, _ = Profile.objects.get_or_create(user=user, username=username)
+        dashboard, _ = Dashboard.objects.get_or_create(owner=profile)
+
+
+class ProfileManager(models.Manager):
+    def current(self, request: Request):
+        return self.filter(user=request.user).first()

@@ -2,16 +2,28 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+from push_notifications.models import GCMDevice
 from rest_framework import mixins, permissions, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 from .models import Invitation
 from .serializers import InvitationReadSerializer
+from ..authentication.services import JWTService
 from ..shared.serializers import EmptySerializer
 
 User = get_user_model()
+
+
+class RegisterGCMDeviceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        device = GCMDevice.objects.create(registration_id=request.user.id, user=request.user)
+        return Response('Устройство зарегистрировано.')
 
 
 class InvitationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
@@ -22,7 +34,7 @@ class InvitationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
         return (
             Invitation.objects
             .filter(Q(recipient=self.request.user.profile))
-            .order_by('-invited_at')
+            .order_by('-created_at')
         )
 
     def get_serializer_class(self):

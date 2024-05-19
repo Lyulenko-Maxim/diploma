@@ -1,4 +1,9 @@
+import uuid
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed
@@ -10,6 +15,8 @@ from rest_framework.views import APIView
 from .serializers import LoginSerializer, RegisterSerializer
 from .utils import check_activation_link, check_credentials, login, logout, send_activation_email
 from ..users.permissions import IsAnonymous
+from ..users.tasks import delete_account_task
+from ..users.utils import get_user_deletion_task_id, safe_revoke
 
 User = get_user_model()
 
@@ -22,6 +29,16 @@ class RegisterView(CreateAPIView):
         user = serializer.save()
         send_activation_email(user)
 
+        user.deleted_at = timezone.now()
+        user.delete_id = uuid.uuid4()
+        user.save()
+
+        delete_account_task.apply_async(
+            kwargs={'user_id': user.id},
+            eta=user.deleted_at + timedelta(minutes=int(settings.USER_ACCOUNT_DELETE_AFTER_REGISTER_MINUTES)),
+            task_id=get_user_deletion_task_id(user),
+        )
+
 
 class ActivateView(APIView):
     permission_classes = [IsAnonymous]
@@ -30,12 +47,23 @@ class ActivateView(APIView):
         user = check_activation_link(self.kwargs.get('token'))
 
         if not user:
-            return Response(data={'error': 'Invalid activation link'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(data={'error': 'Невалидная ссылка активации аккаунта.'}, status=status.HTTP_404_NOT_FOUND)
 
+        result = safe_revoke(user)
+
+        if not result:
+            return Response(data={'error': 'Невалидная ссылка активации аккаунта.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user.deleted_at = None
+        user.delete_id = None
         user.is_active = True
         user.is_verified = True
-        user.save(update_fields=['is_active', 'is_verified', ])
-        return Response(data={'success': 'Successful account activation'}, status=status.HTTP_200_OK)
+        user.save(update_fields=['is_active', 'is_verified', 'deleted_at', 'delete_id'])
+
+        return Response(
+            data={'success': 'Успешная активация аккаунта.\nПожалуйста, авторизуйтесь используя свои учетные данные.'},
+            status=status.HTTP_200_OK
+        )
 
 
 class LoginView(CreateAPIView):
@@ -52,13 +80,15 @@ class LoginView(CreateAPIView):
         user, error_message = check_credentials(email=email, password=password)
 
         if not user:
-            raise AuthenticationFailed(_(error_message))
+            raise AuthenticationFailed(
+                {'error': _('Неверный логин или пароль.\nПожалуйста, проверьте введенные учетные данные.')}
+            )
 
-        return login(user=user, message='Successful login', status=status.HTTP_200_OK)
+        return login(user=user, message='Успешная авторизация.', status=status.HTTP_200_OK)
 
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        return logout(message='Successful logout', status=status.HTTP_200_OK)
+        return logout(message='Успешный выход.', status=status.HTTP_200_OK)

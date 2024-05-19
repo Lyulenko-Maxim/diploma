@@ -1,11 +1,8 @@
 import jwt
 from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.request import Request
 
 from .services import JWTService
-
-User = get_user_model()
 
 
 class JWTAuthentication(BaseAuthentication):
@@ -13,7 +10,9 @@ class JWTAuthentication(BaseAuthentication):
     Аутентификация через JWT-токены.
     """
 
-    def authenticate(self, request: Request) -> tuple[User, None] | None:
+
+    def authenticate(self, request):
+        User = get_user_model()
         access_token, _ = JWTService.get_tokens_from_request(request=request)
 
         # Если нет токена, продолжаем работу как анонимный пользователь

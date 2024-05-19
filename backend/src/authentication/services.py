@@ -1,17 +1,31 @@
 from datetime import datetime, timedelta
 
 import jwt
-from django.contrib.auth import get_user_model
 from rest_framework.request import Request
 
 from django.conf import settings
 
-User = get_user_model()
-
 
 class JWTService:
     @staticmethod
-    def generate_tokens(user: User) -> tuple[str | bytes, str | bytes]:
+    def generate_ws_token(user) -> str | bytes:
+        ws_token_payload = {
+            'id': str(user.id),
+            'iat': datetime.timestamp(datetime.now()),
+            'exp': datetime.utcnow() + timedelta(minutes=float(settings.WS_TOKEN_EXP_MINUTES)),
+        }
+
+        ws_token = jwt.encode(
+            payload=ws_token_payload,
+            key=settings.WS_SIGNING_KEY,
+            algorithm='HS256',
+            headers={'typ': 'JWT', },
+        )
+
+        return ws_token
+
+    @staticmethod
+    def generate_tokens(user) -> tuple[str | bytes, str | bytes]:
         """Генерирует access token и refresh токены для заданного пользователя."""
 
         access_token_payload = {
@@ -63,11 +77,17 @@ class JWTService:
             JWTService.get_payload(token=token)
             return False
 
-        except jwt.ExpiredSignatureError:
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
             return True
+
+
 
     @staticmethod
     def get_payload(token: str | bytes) -> dict:
         """Декодирует payload у токена."""
 
         return jwt.decode(jwt=token, key=settings.JWT_SIGNING_KEY, algorithms=['HS256'])
+
+    @staticmethod
+    def get_ws_payload(token: str | bytes) -> dict:
+        return jwt.decode(jwt=token, key=settings.WS_SIGNING_KEY, algorithms=['HS256'])

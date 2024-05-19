@@ -22,17 +22,14 @@ module.exports = {
           colors: {
             background: "#191919",
             foreground: "#eeeeee",
-            primary: {
-              DEFAULT: "#BEF264",
-              foreground: "#000000",
-            },
-            focus: "#BEF264",
+            content1: "#232323"
           },
         },
         light: {
           colors: {
             background: "#eeeeee",
             foreground: "#191919",
+            content1: "#eeeeee"
           },
         },
       },

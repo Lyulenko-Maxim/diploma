@@ -2,30 +2,25 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+import firebase_admin
 from dotenv import load_dotenv
 
 load_dotenv()
-
-
-def env(key: str, default=None) -> str | None:
-    return os.getenv(key=key, default=default)
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('DJANGO_SECRET_KEY')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG', False)
+DEBUG = os.getenv('DEBUG', False)
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 SITE_ID = 1
 
 # Application definition
 INSTALLED_APPS = [
-    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -39,16 +34,16 @@ INSTALLED_APPS += [
     'src.users',
     'src.authentication',
     'src.management',
-    'src.permissions',
     'src.notifications',
     'src.api',
 ]
 
 INSTALLED_APPS += [
     'rest_framework',
-    'channels',
     'corsheaders',
     'django_celery_results',
+    'push_notifications',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -84,15 +79,15 @@ TEMPLATES = [
     },
 ]
 
-ASGI_APPLICATION = 'core.asgi.application'
-# WSGI_APPLICATION = 'core.wsgi.application'
+# ASGI_APPLICATION = 'core.asgi.application'
+WSGI_APPLICATION = 'core.wsgi.application'
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {'hosts': [{'address': env('CHANNEL_LAYERS_BACKEND'), }]}
-    }
-}
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {'hosts': [{'address': os.getenv('CHANNEL_LAYERS_BACKEND'), }]}
+#     }
+# }
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -100,9 +95,9 @@ CHANNEL_LAYERS = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': 'database',
         'PORT': 5432,
     }
@@ -155,39 +150,50 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'src.users.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'src.authentication.authentication.JWTAuthentication',
     ],
+    'EXCEPTION_HANDLER': 'src.api.v1.exceptions.api_exception_handler',
     'DATETIME_FORMAT': "%d-%m-%Y %H:%M",
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-]
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
+CORS_ALLOW_CREDENTIALS = bool(os.getenv('CORS_ALLOW_CREDENTIALS'))
 
-CORS_ALLOW_CREDENTIALS = True
+JWT_SIGNING_KEY = os.getenv('JWT_SIGNING_KEY')
+JWT_ACCESS_TOKEN_EXP_MINUTES = os.getenv('JWT_ACCESS_TOKEN_EXP_MINUTES')
+JWT_REFRESH_TOKEN_EXP_DAYS = os.getenv('JWT_REFRESH_TOKEN_EXP_DAYS')
 
-JWT_SIGNING_KEY = env('JWT_SIGNING_KEY')
-JWT_ACCESS_TOKEN_EXP_MINUTES = env('JWT_ACCESS_TOKEN_EXP_MINUTES')
-JWT_REFRESH_TOKEN_EXP_DAYS = env('JWT_REFRESH_TOKEN_EXP_DAYS')
+WS_SIGNING_KEY = os.getenv('WS_SIGNING_KEY')
+WS_TOKEN_EXP_MINUTES = os.getenv('WS_TOKEN_EXP_MINUTES')
 
-CELERY_BROKER_URL = env('CELERY_BROKER_URL')
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND')
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = env('CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND')
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = os.getenv('CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP')
 CELERY_TIMEZONE = 'Europe/Minsk'
 
-USER_ACCOUNT_RESTORE_DAYS = env('USER_ACCOUNT_RESTORE_DAYS')
+USER_ACCOUNT_RESTORE_DAYS = os.getenv('USER_ACCOUNT_RESTORE_DAYS')
+USER_ACCOUNT_DELETE_AFTER_REGISTER_MINUTES = os.getenv('USER_ACCOUNT_DELETE_AFTER_REGISTER_MINUTES')
 
-# SMPT SETTINGS
-EMAIL_USE_TLS = env('EMAIL_USE_TLS')
-EMAIL_HOST = env('EMAIL_HOST')
-EMAIL_HOST_USER = env('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
-EMAIL_PORT = env('EMAIL_PORT')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS')
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_PORT = os.getenv('EMAIL_PORT')
 
+from firebase_admin import auth
+from firebase_admin import credentials
+
+cred = credentials.Certificate('core/fcm_secret.json')
+firebase_admin.initialize_app(cred)
+
+PUSH_NOTIFICATIONS_SETTINGS = {
+    'UPDATE_ON_DUPLICATE_REG_ID': True
+}
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -208,10 +214,10 @@ LOGGING = {
         #     'level': 'DEBUG',
         #     'propagate': True,
         # },
-        'daphne': {
-            'handlers': ['console', ],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
+        # 'daphne': {
+        #     'handlers': ['console', ],
+        #     'level': 'DEBUG',
+        #     'propagate': True,
+        # },
     },
 }

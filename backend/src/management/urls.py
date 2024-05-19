@@ -10,9 +10,6 @@ from .views import (
     TaskViewSet,
 )
 
-dashboard_router = DefaultRouter()
-dashboard_router.register(r'', DashboardViewSet, basename='dashboard')
-
 router = DefaultRouter()
 router.register(r'projects', ProjectViewSet, basename='projects')
 
@@ -30,7 +27,7 @@ group_router = routers.NestedSimpleRouter(project_router, r'groups', lookup='gro
 group_router.register(r'permissions', GroupViewSet, basename='project-groups')
 
 urlpatterns = [
-    path(r'', include(dashboard_router.urls)),
+    path(r'dashboard/', DashboardViewSet.as_view(), name='dashboard', ),
     path(r'dashboard/', include(router.urls)),
     path(r'dashboard/', include(project_router.urls)),
     path(r'dashboard/', include(task_router.urls)),

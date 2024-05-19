@@ -18,14 +18,10 @@ django-cors-headers = "^4.3.1"
 pyjwt = "^2.8.0"
 pillow = "^10.3.0"
 flower = "^2.0.1"
-django-eventstream = "^5.1.0"
-daphne = "^4.1.2"
-drf-extensions = "^0.7.1"
 drf-nested-routers = "^0.93.5"
-transliterate = "^1.10.2"
-channels = "^4.1.0"
-channels-redis = "^4.2.0"
-python-slugify = {extras = ["unicode"], version = "^8.0.4"}
+
+django-push-notifications = {extras = ["fcm"], version = "^3.1.0"}
+drf-spectacular = "^0.27.2"
 
 
 [tool.poetry.dev-dependencies]

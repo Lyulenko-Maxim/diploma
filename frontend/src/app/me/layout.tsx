@@ -4,8 +4,10 @@ import type {Metadata} from 'next';
 import {fontSans} from '@/config/fonts';
 import clsx from "clsx";
 import {ReactNode} from "react";
-import {Layout} from "@/components/layout/layout";
+
 import * as React from "react";
+import MainLayout from "@/components/nav/MainLayout";
+import Aside from "@/components/nav/Aside";
 
 // export const metadata: Metadata = {
 //     title: 'Next.js',
@@ -13,12 +15,16 @@ import * as React from "react";
 //
 // }
 
-export default function DashboardLayout({children,}: {
+export default function Layout({children,}: {
     children: ReactNode
 }) {
     return (
-        <Layout>
-            {children}
-        </Layout>
+        <MainLayout>
+            <div className='flex flex-1 overflow-hidden'>
+                <Aside/>
+                {children}
+            </div>
+
+        </MainLayout>
     )
 }

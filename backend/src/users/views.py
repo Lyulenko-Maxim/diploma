@@ -3,17 +3,17 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from rest_framework import mixins, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.viewsets import GenericViewSet, ModelViewSet
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.viewsets import GenericViewSet
 
-from .models import Profile
 from .serializers import (
     ChangePasswordSerializer,
-    ProfileReadSerializer,
-    ProfileSerializer,
+)
+from ..management.serializers import (
+    ProfilePrivateSerializer,
+    ProfileUpdateSerializer,
     UserSerializer
 )
 from .utils import create_account_deletion_request, safe_revoke
@@ -87,8 +87,6 @@ class UserViewSet(viewsets.GenericViewSet):
         user.save()
 
         create_account_deletion_request(user)
-        from core.celery import debug_task
-        debug_task.delay()
         return Response(data={'success': 'Deletion request accepted'}, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=['post'], url_path='account/restore')
@@ -108,7 +106,7 @@ class UserViewSet(viewsets.GenericViewSet):
 
 
 class ProfileViewSet(GenericViewSet):
-    serializer_class = ProfileReadSerializer
+    serializer_class = ProfilePrivateSerializer
 
     @action(detail=False, methods=['get'], url_path='profile')
     def profile(self, request, *args, **kwargs):
@@ -130,15 +128,7 @@ class ProfileViewSet(GenericViewSet):
 
     def get_serializer_class(self):
         if self.action in ('update', 'partial_update',):
-            self.serializer_class = ProfileReadSerializer
+            self.serializer_class = ProfileUpdateSerializer
 
         return super().get_serializer_class()
 
-# class ProfilePhotoViewSet(ModelViewSet):
-#     queryset = ProfilePhoto.objects.all()
-#
-#     def get_serializer_class(self):
-#         if self.action in ('create',):
-#             self.serializer_class = ProfilePhotoSerializer
-#         else:
-#             self.serializer_class = ProfilePhotoReadSerializer

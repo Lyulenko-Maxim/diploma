@@ -2,7 +2,7 @@
 import React, {FC, useEffect, useState} from 'react';
 import {DragDropContext, Droppable} from "@hello-pangea/dnd";
 import ProjectItem from "@/components/projects/ProjectItem";
-import usePrepareTableData, {useDashboard, useProjectDND} from "@/hooks/project.hooks";
+import {usePrepareTableData, useDashboard, useProjectDND} from "@/hooks/project.hooks";
 import {CircularProgress, Skeleton} from "@nextui-org/react";
 import {IProjectListProps, IProjectTableProps} from "@/types/project.types";
 

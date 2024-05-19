@@ -9,4 +9,4 @@ class InvitationReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Invitation
-        fields = ('id', 'project', 'sender', 'invited_at',)
+        fields = ('id', 'project', 'sender', 'created_at',)

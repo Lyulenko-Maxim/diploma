@@ -1,5 +1,3 @@
-import uuid
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import PermissionsMixin
@@ -8,10 +6,11 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..shared.models import UUIDModel
+from .managers import ProfileManager
+from ..shared.models import BaseModel
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     from .managers import UserManager
     objects = UserManager()
 
@@ -20,10 +19,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = _('users')
         swappable = 'AUTH_USER_MODEL'
 
-    id = models.UUIDField(_('id'), primary_key=True, default=uuid.uuid4, unique=True, editable=False, )
     email = models.EmailField(_('email address'), unique=True, )
     new_email = models.EmailField(_('new email address'), null=True, blank=True, )
-    date_joined = models.DateTimeField(_('date joined'), default=timezone.now, )
     is_active = models.BooleanField(_('active'), default=False, )
     is_staff = models.BooleanField(_('staff status'), default=False, )
     is_superuser = models.BooleanField(_('superuser status'), default=False, )
@@ -45,16 +42,17 @@ def profile_photo_upload_to(instance, filename: str) -> str:
     return f'profiles/{instance.id}/photo.{extension}'
 
 
-class Profile(UUIDModel):
+class Profile(BaseModel):
     class Meta:
         verbose_name = _('profile')
         verbose_name_plural = _('profiles')
 
+    objects = ProfileManager()
     user = models.OneToOneField(get_user_model(), on_delete=models.CASCADE, verbose_name=_('user'), )
-    username = models.CharField(_('username'), max_length=32, null=True, blank=True, )
+    username = models.CharField(_('username'), max_length=32, unique=True, )
     first_name = models.CharField(_('first name'), max_length=64, blank=True, null=True, )
     last_name = models.CharField(_('last name'), max_length=64, blank=True, null=True, )
-    banner_color_hex = models.CharField(_('banner color'), max_length=7, default='#FFF', )
+    banner_color_hex = models.CharField(_('banner color'), max_length=7, default='#eeeeee', )
     photo = models.ImageField(
         _('photo'),
         upload_to=profile_photo_upload_to,
@@ -70,7 +68,7 @@ class Profile(UUIDModel):
         return super().save()
 
 
-class ProfileSettings(UUIDModel):
+class ProfileSettings(BaseModel):
     ACCESS_CHOICES = [
         ('all', _('All')),
         ('members', _('Members')),
@@ -83,14 +81,3 @@ class ProfileSettings(UUIDModel):
 
     email_visibility = models.CharField(_('who can view email'), max_length=10, choices=ACCESS_CHOICES, default='me')
     invitation = models.CharField(_('who can invite'), max_length=10, choices=ACCESS_CHOICES, default='all')
-
-    # avatar = models.OneToOneField('ProfilePhoto', on_delete=models.CASCADE, related_name='related_profile',
-    #                               blank=True, null=True, verbose_name='avatar', )
-
-    # class ProfilePhoto(UUIDModel):
-    #     class Meta:
-    #         verbose_name = _('profile photo')
-    #         verbose_name_plural = _('profiles photos')
-    #
-    #     image = models.ImageField(_('image'), upload_to='', blank=True, null=True, )
-    #     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='photos', verbose_name=_('profile'), )

@@ -33,21 +33,21 @@ const Account = () => {
             label: "Профиль",
             content: <Profile/>
         },
-        {
-            id: "email",
-            label: "Email",
-            content: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."
-        },
+        // {
+        //     id: "email",
+        //     label: "Email",
+        //     content: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."
+        // },
         {
             id: "pass",
             label: "Пароль",
             content: <ChangePassword/>
         },
-        {
-            id: "conf",
-            label: "Конфиденциальность",
-            content: "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
-        },
+        // {
+        //     id: "conf",
+        //     label: "Конфиденциальность",
+        //     content: "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+        // },
         {
             id: "account",
             label: "Аккаунт",
@@ -93,15 +93,16 @@ const Account = () => {
             headerRef.current.style.backgroundColor = profile.banner_color_hex
         }
     }, [headerRef, colorPickerState.color, profile])
-    
+
     if (!profile) {
-        return <CircularProgress color='primary' label="Loading..." className={'flex w-full h-full m-auto justify-center'}/>
+        return <CircularProgress color='primary' label="Loading..."
+                                 className={'flex w-full h-full m-auto justify-center'}/>
     }
-    
+
     return (
         <div className='m-8 rounded-xl shadow-xl bg-sidebar'>
             <header ref={headerRef}
-                    className='h-36 overflow-hidden rounded-t-xl shadow hover:cursor-pointer'>
+                    className='h-32 overflow-hidden rounded-t-xl shadow hover:cursor-pointer'>
                 <div
                     className='h-full w-full bg-black bg-opacity-0 transition duration-300 ease-in-out group hover:bg-opacity-30'>
                     <Popover showArrow placement="bottom" shouldBlockScroll>
@@ -133,15 +134,21 @@ const Account = () => {
                                onChange={handleImageChange}
                                className={'hidden'}
                         />
-                        <Image
-                            as={NextImage}
-                            width={200}
-                            height={200}
-                            radius='full'
-                            src={typeof (profile?.photo) == 'string' ? profile?.photo : '/'}
-                            className="h-24 w-24 object-cover text-xl transition ease-in-out hover:cursor-pointer"
-                            alt="Avatar"
-                        />
+                        {profile.photo
+                            ? <Image
+                                as={NextImage}
+                                width={200}
+                                height={200}
+                                radius='full'
+                                src={typeof (profile?.photo) == 'string' ? profile?.photo : '/'}
+                                className="h-24 w-24 object-cover text-xl transition ease-in-out hover:cursor-pointer"
+                                alt="Avatar"
+                            />
+                            :<div className="flex h-24 w-24 items-center justify-center rounded-full border-2 object-cover text-xl transition ease-in-out border-foreground/50 hover:cursor-pointer">
+                                <Camera strokeWidth={2} size={24} />
+                            </div>
+
+                        }
                         <div
                             className={
                                 'absolute top-0 right-0 bottom-0 left-0 z-10 flex h-full w-full items-center justify-center ' +
@@ -163,15 +170,15 @@ const Account = () => {
                     <div className="max-w-md">
                         <div className="space-y-1">
                             <h4 className="font-medium text-large">{profile?.username}</h4>
-                            <p className="text-small text-default-400">short-description.</p>
+                            {/*<p className="text-small text-default-400">short-description.</p>*/}
                         </div>
                         <Divider className="my-4"/>
                         <div className="flex h-5 items-center space-x-4 text-small">
                             <div className='flex items-center gap-1'><Mail size={20}/> {user?.email}</div>
                             <Divider orientation="vertical"/>
-                            <div>Docs</div>
-                            <Divider orientation="vertical"/>
-                            <div>Source</div>
+                            {/*<div>Docs</div>*/}
+                            {/*<Divider orientation="vertical"/>*/}
+                            {/*<div>Source</div>*/}
                         </div>
                     </div>
 
