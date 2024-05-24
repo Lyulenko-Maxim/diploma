@@ -20,6 +20,8 @@ services:
       PGADMIN_DEFAULT_PASSWORD: root
     volumes:
       - pgadmin_data:/var/lib/pgadmin
+    logging:
+      driver: none
 
   redis:
     container_name: redis
@@ -93,6 +95,27 @@ services:
     depends_on:
       - redis
       - worker
+
+
+#  frontend:
+#    container_name: frontend
+#    hostname: frontend
+#    build:
+#      context: frontend
+#      args:
+#        DEBUG: 1
+#    ports:
+#      - "3000:3000"
+#    volumes:
+#      - .:/app
+#    environment:
+#      - NODE_ENV=development
+#    command: >
+#      sh -c "if [ \"$DEBUG\" = \"1\" ]; then yarn dev; else yarn start; fi"
+#    depends_on:
+#      - database
+#      - redis
+
 
 volumes:
   database_data:

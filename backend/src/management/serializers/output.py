@@ -28,7 +28,7 @@ class ProfilePrivateSerializer(ModelSerializer):
 class ProfilePublicSerializer(ModelSerializer):
     class Meta:
         model = Profile
-        fields = ('id', 'username', 'first_name', 'last_name', 'photo')
+        fields = ('id', 'username', 'first_name', 'last_name', 'photo', 'banner_color_hex')
 
 
 class PermissionListSerializer(ModelSerializer):
@@ -64,7 +64,7 @@ class MemberListSerializer(ModelSerializer):
 
 class MemberDetailSerializer(ModelSerializer):
     profile = ProfilePublicSerializer(read_only=True)
-    groups = GroupListSerializer(read_only=True)
+    groups = GroupListSerializer(read_only=True, many=True)
 
     class Meta:
         model = ProjectMember
@@ -74,15 +74,23 @@ class MemberDetailSerializer(ModelSerializer):
 class MemberCurrentSerializer(ModelSerializer):
     profile = ProfilePublicSerializer(read_only=True)
     permissions = SerializerMethodField(read_only=True)
-
+    highest_group = SerializerMethodField(read_only=True)
+    is_owner = SerializerMethodField(read_only=True)
     class Meta:
         model = ProjectMember
-        fields = ('id', 'profile', 'permissions')
-
+        fields = ('id', 'profile', 'permissions', 'highest_group', 'is_owner')
+    
+    @staticmethod
+    def get_is_owner(obj: ProjectMember):
+        return obj.project.owner.id==obj.profile.id
+        
     @staticmethod
     def get_permissions(obj: ProjectMember):
         return obj.permissions
-
+	
+    @staticmethod
+    def get_highest_group(obj: ProjectMember):
+        return GroupListSerializer(instance=obj.highest_group).data
 
 class StatusListSerializer(ModelSerializer):
     class Meta:
@@ -113,6 +121,7 @@ class TaskListSerializer(ModelSerializer):
         fields = (
             'id', 'title', 'start_date', 'end_date', 'duration',
             'priority', 'status', 'author', 'assignee', 'markers',
+            'created_at','updated_at'
         )
 
 

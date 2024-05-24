@@ -3,7 +3,8 @@ import {Content} from "@/components/home/content";
 
 const Me: NextPage = () => {
     return (
-        <Content/>
+        <></>
+        // <Content/>
     )
 };
 

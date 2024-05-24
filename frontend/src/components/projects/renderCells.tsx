@@ -1,11 +1,11 @@
 import {Avatar, AvatarGroup, Chip, getKeyValue, User} from "@nextui-org/react";
 import {CameraOff, Circle} from "lucide-react";
 import React from "react";
-import {IProfile} from "@/types/user.types";
-import {IProjectColumn, IProjectMember, IProjectTableProps} from "@/types/project.types";
+import {IProfilePublic} from "@/types/user.types";
+import {IProjectColumn, IMember, IDashboardProject} from "@/types/project.types";
 import {IGroup} from "@/types/group.types";
 
-const renderOwnerColumn = (owner: IProfile) => {
+const renderOwnerColumn = (owner: IProfilePublic) => {
     const {username, first_name, last_name, photo} = owner;
     return (
         <div>
@@ -14,7 +14,7 @@ const renderOwnerColumn = (owner: IProfile) => {
                 description={(first_name || '') + ' ' + (last_name || '')}
                 avatarProps={{
                     isBordered: true,
-                    src: typeof photo === 'string' ? photo : '',
+                    src: photo || '',
                     fallback: <CameraOff/>
                 }}
             />
@@ -22,21 +22,21 @@ const renderOwnerColumn = (owner: IProfile) => {
     );
 };
 
-const renderMembersColumn = (members: IProjectMember[], members_count: number) => {
+const renderMembersColumn = (members: IMember[], members_count: number) => {
     return (
         <div>
             <AvatarGroup isBordered max={3} total={members_count} className="justify-start">
                 {members.map((member) => {
                     const {photo, id} = member.profile;
-                    return <Avatar key={id} src={typeof photo === 'string' ? photo : ''}/>;
+                    return <Avatar key={id} src={photo || ''}/>;
                 })}
             </AvatarGroup>
         </div>
     );
 };
 
-const renderMyGroupColumn = (my_group: IGroup) => {
-    const {name, color_hex} = my_group;
+const renderMyGroupColumn = (currentMember: IMember) => {
+    const {name, color_hex} = currentMember.highest_group;
     return (
         <div>
             <Chip
@@ -50,14 +50,16 @@ const renderMyGroupColumn = (my_group: IGroup) => {
     );
 };
 
-export const renderCells = (item: IProjectTableProps, column: IProjectColumn) => {
+export const renderCells = (item: IDashboardProject, column: IProjectColumn) => {
     switch (column.key) {
+        case 'name':
+            return item.project.name;
         case 'owner':
-            return renderOwnerColumn(item.owner);
+            return renderOwnerColumn(item.project.owner);
         case 'members':
-            return renderMembersColumn(item.members, item.members_count);
+            return renderMembersColumn(item.random_members, item.members_count);
         case 'my_group':
-            return renderMyGroupColumn(item.my_group);
+            return renderMyGroupColumn(item.current_member);
         default:
             return (
                 <div key={column.key}>

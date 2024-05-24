@@ -4,9 +4,7 @@ import ProjectTable from "@/components/projects/ProjectTable";
 const Projects = () => {
 
     return (
-        <div className="">
-            <ProjectTable/>
-        </div>
+        <ProjectTable/>
     );
 };
 

@@ -1,6 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {projectService} from "@/services/project.service";
-import {IDashboard, IDashboardProject, IProject, IProjectTableProps} from "@/types/project.types";
+import {IDashboard, IDashboardProject, IProject} from "@/types/project.types";
 import {toast} from "sonner";
 import {DropResult} from "@hello-pangea/dnd";
 import {Dispatch, SetStateAction, useCallback} from "react";
@@ -23,9 +23,9 @@ export const useProjectCreate = () => {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: (data: Omit<IProject, 'id'>) => projectService.create(data),
-        onSuccess() {
+        onSuccess: async () => {
             toast.success('Проект успешно создан')
-            queryClient.invalidateQueries({queryKey: ['dashboard']});
+            await queryClient.invalidateQueries({queryKey: ['dashboard']});
         },
         onError(error) {
             toast.error('Ошибка при создании нового проекта')
@@ -33,29 +33,28 @@ export const useProjectCreate = () => {
     })
 }
 
-export const usePrepareTableData = (dashboard: IDashboard | undefined) => {
-    return useCallback((): IProjectTableProps[] => {
-        if (!dashboard || !dashboard.projects || dashboard.projects.length === 0) {
-            return [];
-        }
-
-        return dashboard.projects.map(({project, order, my_group, members, members_count}) => ({
-            id: project.id,
-            name: project.name,
-            slug: project.slug,
-            owner: project.owner,
-            my_group: my_group,
-            members: members,
-            members_count: members_count,
-            order: order,
-        }));
-    }, [dashboard]);
-};
+// export const usePrepareTableData = (dashboard: IDashboard | undefined) => {
+//     return useCallback(() => {
+//         if (!dashboard || !dashboard.projects || dashboard.projects.length === 0) {
+//             return [];
+//         }
+//
+//         return dashboard.projects.map(({project, order, current_member, random_members, members_count}) => ({
+//             id: project.id,
+//             name: project.name,
+//             owner: project.owner,
+//             my_group: current_member.highest_group,
+//             members: random_members,
+//             members_count: members_count,
+//             order: order,
+//         }));
+//     }, [dashboard]);
+// };
 
 
 export const useProjectDND = (
-    projects: IProjectTableProps[],
-    setProjects: Dispatch<SetStateAction<IProjectTableProps[]>>
+    projects: IDashboardProject[],
+    setProjects: Dispatch<SetStateAction<IDashboardProject[]>>
 ) => {
 
     const {mutate, isError} = useProjectMove()
@@ -92,9 +91,9 @@ export const useProjectMove = () => {
             id: string,
             data: Pick<IDashboardProject, 'order'>
         }) => projectService.move(data.id, data.data),
-        onSuccess() {
+        onSuccess: async () => {
             toast.success('Перемещено')
-            queryClient.invalidateQueries({queryKey: ['dashboard']});
+            await queryClient.invalidateQueries({queryKey: ['dashboard']});
         },
     })
 }

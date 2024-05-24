@@ -22,6 +22,7 @@ axiosWithAuth.interceptors.response.use(
     async error => {
         if (error?.response?.status === 401) {
             removeFromStorage()
+
         }
         throw error
     }

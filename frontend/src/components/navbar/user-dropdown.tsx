@@ -10,9 +10,12 @@ import {
 import React from "react";
 import {DarkModeSwitch} from "./darkmodeswitch";
 import LogoutModal from "@/components/modals/LogoutModal";
+import {useProfile} from "@/hooks/user.hooks";
 
 export const UserDropdown = () => {
+    const {data: profile} = useProfile()
     const {isOpen, onOpen, onOpenChange} = useDisclosure();
+    if (!profile) return <></>
     return (
         <>
             <Dropdown>
@@ -22,7 +25,7 @@ export const UserDropdown = () => {
                             as="button"
                             color="secondary"
                             size="md"
-                            src="https://i.pravatar.cc/150?u=a042581f4e29026704d"
+                            src={profile.photo}
                         />
                     </DropdownTrigger>
                 </NavbarItem>
@@ -34,17 +37,17 @@ export const UserDropdown = () => {
                         key="profile"
                         className="flex flex-col justify-start w-full items-start"
                     >
-                        <p>Signed in as</p>
-                        <p>zoey@example.com</p>
+                        <p>Вы вошли как</p>
+                        <p className='font-medium'>{profile.user.email}</p>
                     </DropdownItem>
-                    <DropdownItem key="settings">My Settings</DropdownItem>
-                    <DropdownItem key="team_settings">Team Settings</DropdownItem>
-                    <DropdownItem key="analytics">Analytics</DropdownItem>
-                    <DropdownItem key="system">System</DropdownItem>
-                    <DropdownItem key="configurations">Configurations</DropdownItem>
-                    <DropdownItem key="help_and_feedback">Help & Feedback</DropdownItem>
+                    {/*<DropdownItem key="settings">My Settings</DropdownItem>*/}
+                    {/*<DropdownItem key="team_settings">Team Settings</DropdownItem>*/}
+                    {/*<DropdownItem key="analytics">Analytics</DropdownItem>*/}
+                    {/*<DropdownItem key="system">System</DropdownItem>*/}
+                    {/*<DropdownItem key="configurations">Configurations</DropdownItem>*/}
+                    {/*<DropdownItem key="help_and_feedback">Help & Feedback</DropdownItem>*/}
                     <DropdownItem key="logout" color="danger" className="text-danger " onClick={onOpen}>
-                        Log Out
+                        Выйти
                     </DropdownItem>
                     <DropdownItem key="switch">
                         <DarkModeSwitch/>

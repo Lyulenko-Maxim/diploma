@@ -1,7 +1,7 @@
 import {IBase} from "@/types/root.types";
 import {IStatus} from "@/types/status.types";
 import {IMarker} from "@/types/marker.types";
-import {IProject, IProjectMember} from "@/types/project.types";
+import {IMember, IProject} from "@/types/project.types";
 import {IComment} from "@/types/comment.types";
 
 export enum PriorityEnum {
@@ -13,21 +13,32 @@ export enum PriorityEnum {
     LOWEST = 'lowest',
 }
 
-export interface ITask extends IBase {
-    key: string,
-    status: string,
+export interface ITaskList extends IBase {
     title: string,
-    description: string | null,
-    priority: PriorityEnum | PriorityEnum.MEDIUM,
-    markers: IMarker[] | [],
-    due_date: Date | null,
-    is_archived: boolean,
-    project: IProject,
-    author: IProjectMember,
-    assignee: IProjectMember | null,
-    parent: ITask | null,
-    dependencies: ITask[] | [],
-    available_dependencies: ITask[] | [],
-    comments: IComment[] | [],
-    order: number | 0
+    start_date?: Date,
+    end_date?: Date,
+    duration?: number,
+    priority: PriorityEnum,
+    status: IStatus,
+    author: IMember,
+    assignee?: IMember,
+    markers: IMarker[],
+    order: number
+}
+
+export interface ITaskDetail extends ITaskList {
+    description?: string,
+    dependencies: ITaskList[],
+    available_dependencies: ITaskList[],
+    comments: IComment[],
+}
+
+export interface ITaskInput extends Partial<Omit<ITaskDetail, 'id' | 'title' | 'status'>> {
+    title: string;
+    status: string,
+}
+
+export interface ITaskMove {
+    status: string,
+    order: number
 }

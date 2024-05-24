@@ -2,6 +2,7 @@ import React, {FC, PropsWithChildren} from 'react';
 import Link from "next/link";
 import {Button} from "@nextui-org/button";
 import Image from "next/image";
+import {GanttChart} from "lucide-react";
 
 interface AuthFormProps {
     type: 'login' | 'register'
@@ -24,8 +25,9 @@ const AuthForm: FC<PropsWithChildren & AuthFormProps> = (
                 className='w-1/4 m-auto shadow bg-sidebar rounded-xl p-layout py-10'
                 onSubmit={onSubmit}>
                 <div className='w-fit flex flex-col gap-5 items-center mx-auto'>
-                    <div className='flex items-center w-[100px] h-[100px] overflow-hidden'>
-                        <Image src={'/logo.svg'} alt={'logo'} width={100} height={100}/>
+                    <div className='flex items-center'>
+                        <span className={'flex items-center font-medium text-2xl'}>SYN<GanttChart size={32}
+                                                                                                  className="fill-foreground"/>RGY</span>
                         {/*<h1 className='font-light text-gray-500'>SYNERGY</h1>*/}
                     </div>
                     <h3 className="text-2xl font-medium text-default-900">
@@ -44,13 +46,13 @@ const AuthForm: FC<PropsWithChildren & AuthFormProps> = (
 
                     {children}
 
-                    {type === 'login' ?
-                        <div className='w-full flex flex-col items-end'>
-                            <Link href={'/'} className='text-sm font-normal text-primary'>
-                                Забыли пароль?
-                            </Link>
-                        </div> : ''
-                    }
+                    {/*{type === 'login' ?*/}
+                    {/*    <div className='w-full flex flex-col items-end'>*/}
+                    {/*        <Link href={'/'} className='text-sm font-normal text-primary'>*/}
+                    {/*            Забыли пароль?*/}
+                    {/*        </Link>*/}
+                    {/*    </div> : ''*/}
+                    {/*}*/}
 
                     <Button
                         radius={"sm"}

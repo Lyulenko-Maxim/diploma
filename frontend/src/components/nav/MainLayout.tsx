@@ -1,10 +1,11 @@
+'use client'
 import React, {ReactNode} from 'react';
 import {Navbar, NavbarBrand, NavbarContent, NavbarItem} from "@nextui-org/react";
 import {BurguerButton} from "@/components/navbar/burguer-button";
 import Link from "next/link";
 import Image from "next/image";
 import {NotificationsDropdown} from "@/components/navbar/notifications-dropdown";
-import {CircleHelp} from "lucide-react";
+import {CircleHelp, GanttChart, Kanban, Puzzle} from "lucide-react";
 import {UserDropdown} from "@/components/navbar/user-dropdown";
 import clsx from "clsx";
 import {usePathname} from "next/navigation";
@@ -13,7 +14,7 @@ export default function MainLayout({children,}: {
     children: ReactNode
 }) {
     const pathname = usePathname();
-    console.log(pathname)
+
     return (
         <div className="relative flex flex-col flex-1 overflow-y-hidden overflow-x-hidden h-screen">
             <Navbar
@@ -42,10 +43,9 @@ export default function MainLayout({children,}: {
                     <BurguerButton/>
                 </NavbarContent>
 
-                <NavbarBrand className='flex-grow-0 basis-auto'>
-                    <Link href={'/me'} className={'flex justify-center items-center font-light'}>
-                        <Image src={'/logo.svg'} alt={'logo'} width={50} height={100}/>
-                        <h1>SYNERGY</h1>
+                <NavbarBrand className='flex-grow-0 mr-4 basis-auto'>
+                    <Link href={'/me'} className={'flex gap-1 justify-center items-center font-light'}>
+                        <span className={'flex items-center font-medium text-2xl'}>SYN<GanttChart size={32} className="fill-foreground"/>RGY</span>
                     </Link>
                 </NavbarBrand>
 

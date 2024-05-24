@@ -8,7 +8,7 @@ import {renderCells} from "@/components/projects/renderCells";
 
 const ProjectItem: FC<IProjectItemProps> = ({item, index, columns}) => {
     return (
-        <Link href={`./projects/${item.id}`}>
+        <Link href={`./projects/${item.project.id}`}>
             <Draggable index={index} draggableId={item.id}>
                 {provided => (
                     <div key={item.id} ref={provided.innerRef}

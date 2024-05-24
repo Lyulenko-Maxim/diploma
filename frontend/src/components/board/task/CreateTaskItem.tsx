@@ -4,14 +4,15 @@ import clsx from "clsx";
 import {CardFooter} from "@nextui-org/card";
 import {SquarePlus} from "lucide-react";
 import {useTaskCreate} from "@/hooks/task.hooks";
-import {ProjectDetailsProps} from "@/app/me/projects/[id]/page";
 import {IStatus} from "@/types/status.types";
+import {useProjectParams} from "@/app/me/projects/[projectId]/providers";
 
 export interface CreateTaskItemProps {
     status: IStatus
 }
 
-const CreateTaskItem: FC<ProjectDetailsProps & CreateTaskItemProps> = ({params, status}) => {
+const CreateTaskItem: FC<CreateTaskItemProps> = ({status}) => {
+    const projectId = useProjectParams()
     const [isExpanded, setIsExpanded] = useState<boolean>(false);
     const [value, setValue] = React.useState("");
     const cardRef = useRef<HTMLDivElement | null>(null);
@@ -33,7 +34,7 @@ const CreateTaskItem: FC<ProjectDetailsProps & CreateTaskItemProps> = ({params, 
 
     const handleCreateTask = () => {
         if (value.trim() != '')
-            mutate({projectId: params.id, data: {title: value, status: status.id}})
+            mutate({projectId: projectId, data: {title: value, status: status.id}})
     }
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -43,21 +44,24 @@ const CreateTaskItem: FC<ProjectDetailsProps & CreateTaskItemProps> = ({params, 
     };
 
     useEffect(() => {
-        if (isSuccess) {
+        if (isSuccess && !isPending) {
             setIsExpanded(false)
-            setValue('')
+            setTimeout(() => {
+                setValue('')
+            }, 1)
+
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [isSuccess]);
+    }, [isSuccess, isPending]);
 
     return (
         <>
             <Card ref={cardRef}
                   radius='sm'
-                  className={clsx("bg-content1 mb-4", {
+                  className={clsx("bg-content1 mb-2 w-[350px] ml-[17.5px]", {
                       'hidden': !isExpanded,
                       'block': isExpanded
                   })}>
@@ -90,7 +94,7 @@ const CreateTaskItem: FC<ProjectDetailsProps & CreateTaskItemProps> = ({params, 
             <Button onPress={handleCardClick}
                     radius='sm'
 
-                    className={clsx('flex gap-4 bg-content1 pl-3 py-6 mb-4 shadow-medium justify-start',
+                    className={clsx('flex w-[350px] mx-[17.5px] gap-4 bg-content1 pl-3 py-6 mb-2 shadow-medium justify-start',
                         {'hidden': isExpanded,}
                     )}>
                 <SquarePlus className='text-foreground'/>

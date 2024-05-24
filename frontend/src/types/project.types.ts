@@ -7,9 +7,11 @@ export interface IProject extends IBase {
     name: string,
     description: string,
     owner: IProfilePublic,
+    photo: string
 }
 
-export interface IProjectInput extends Omit<IProject, 'id' | 'owner'> {
+export interface IProjectInput extends Omit<IProject, 'id' | 'owner' | 'photo'> {
+    photo?: File
 }
 
 export interface IDashboard extends IBase {
@@ -20,6 +22,11 @@ export interface IDashboard extends IBase {
 export interface IMember extends IBase {
     profile: IProfilePublic
     highest_group: IGroup
+}
+
+export interface IMemberCurrent extends IMember {
+    permissions: string[]
+    is_owner: boolean
 }
 
 export interface IMemberDetails extends IMember {

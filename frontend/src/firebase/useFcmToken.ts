@@ -23,20 +23,7 @@ const useFcmToken = () => {
                             vapidKey: 'BKtgDsSRmiA6XD9tFQpfOSQ3HNz4OoVTQT_pBZZly3ZQv3ygcu8FVjDkqPz4q1q-HrpXZGx3SHPwB4ew8Mn5cU8'
                         });
                         if (currentToken) {
-                            const storedToken = localStorage.getItem('fcm_token');
-                            if (currentToken !== storedToken) {
-                                setToken(currentToken);
-                                localStorage.setItem('fcm_token', currentToken);
-
-                                const data: IDeviceRegister = {
-                                    registration_id: currentToken,
-                                    active: true,
-                                    cloud_message_type: 'FCM'
-                                };
-
-                                await notificationService.registerDevice(data);
-                            }
-
+                            setToken(currentToken);
                         } else console.log('No registration token available. Request permission to generate one.');
                     }
                 }

@@ -1,7 +1,7 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {toast} from "sonner";
 import {taskService} from "@/services/task.service";
-import {ITask} from "@/types/task.types";
+import {ITaskInput, ITaskList, ITaskMove} from "@/types/task.types";
 import {useEffect, useState} from "react";
 
 export const useTaskList = (projectId: string) => {
@@ -10,7 +10,7 @@ export const useTaskList = (projectId: string) => {
         queryFn: () => taskService.list(projectId),
     })
 
-    const [items, setItems] = useState<ITask[] | undefined>(data);
+    const [items, setItems] = useState<ITaskList[] | undefined>(data);
 
     useEffect(() => {
         setItems(data)
@@ -30,7 +30,7 @@ export const useTaskCreate = () => {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async (data: { projectId: string, data: Partial<Omit<ITask, 'id' | 'key'>> }) => {
+        mutationFn: async (data: { projectId: string, data: ITaskInput }) => {
             return await taskService.create(data.projectId, data.data)
         },
 
@@ -50,7 +50,7 @@ export const useTaskUpdate = () => {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async (data: { projectId: string, id: string, data: Omit<ITask, 'id'> }) => {
+        mutationFn: async (data: { projectId: string, id: string, data: ITaskInput }) => {
             return await taskService.update(data.projectId, data.id, data.data)
         },
 
@@ -71,7 +71,7 @@ export const useTaskPatch = () => {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async (data: { projectId: string, id: string, data: Partial<Omit<ITask, 'id'>> }) => {
+        mutationFn: async (data: { projectId: string, id: string, data: ITaskInput }) => {
             return await taskService.patch(data.projectId, data.id, data.data)
         },
 
@@ -113,7 +113,7 @@ export const useTaskMove = () => {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async (data: { projectId: string, id: string, data: Partial<Pick<ITask, 'order' | 'status'>> }) => {
+        mutationFn: async (data: { projectId: string, id: string, data: ITaskMove}) => {
             return await taskService.move(data.projectId, data.id, data.data)
         },
 

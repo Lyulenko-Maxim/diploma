@@ -1,42 +1,45 @@
 'use client'
 import React, {FC, useEffect, useState} from 'react';
-import {ProjectDetailsProps} from "@/app/me/projects/[id]/page";
 import {useStatusList, useStatusPatch} from "@/hooks/status.hooks";
 import StatusItem from "@/components/board/status/StatusItem";
 import {useTaskList, useTaskMove, useTaskPatch} from "@/hooks/task.hooks";
 import {DragDropContext, DraggableLocation, Droppable, DropResult} from "@hello-pangea/dnd";
-import {ITask} from "@/types/task.types";
-import {IStatus} from "@/types/status.types";
+import {ITaskList} from "@/types/task.types";
+import {IStatus, StatusCategoryEnum} from "@/types/status.types";
+import {Card, CardBody, Chip} from "@nextui-org/react";
+import {GripHorizontal} from "lucide-react";
+import {useProjectParams} from "@/app/me/projects/[projectId]/providers";
 
 
-const StatusList: FC<ProjectDetailsProps> = ({params}) => {
-    const {items: statuses, setItems: setStatuses} = useStatusList(params.id)
-    const {items: tasks, setItems: setTasks} = useTaskList(params.id)
+const StatusList = () => {
+    const projectId = useProjectParams()
+    const {items: statuses, setItems: setStatuses} = useStatusList(projectId)
+    const {items: tasks, setItems: setTasks} = useTaskList(projectId)
     const {mutate: statusPatch} = useStatusPatch()
     const {mutate: taskMove} = useTaskMove()
 
-    const groupTasksByStatus = (tasks: ITask[], statuses: IStatus[]): Record<string, ITask[]> => {
+    const groupTasksByStatus = (tasks: ITaskList[], statuses: IStatus[]): Record<string, ITaskList[]> => {
         const initialStatusMap = statuses.reduce((acc, status) => {
             acc[status.id] = [];
             return acc;
-        }, {} as Record<string, ITask[]>);
+
+        }, {} as Record<string, ITaskList[]>);
 
         return tasks.reduce((acc, task) => {
-            const {status} = task;
-            if (!acc[status]) {
-                acc[status] = [];
-            }
-            acc[status].push(task);
+            const {id: statusId} = task.status;
+
+            if (!acc[statusId]) acc[statusId] = [];
+
+            acc[statusId].push(task);
             return acc;
         }, initialStatusMap);
     };
 
-    const [tasksByStatus, setTasksByStatus] = useState<Record<string, ITask[]>>();
+    const [tasksByStatus, setTasksByStatus] = useState<Record<string, ITaskList[]>>();
 
     useEffect(() => {
         if (tasks && statuses) {
             setTasksByStatus(groupTasksByStatus(tasks, statuses));
-            console.log('ya')
         }
     }, [tasks, statuses]);
 
@@ -48,7 +51,7 @@ const StatusList: FC<ProjectDetailsProps> = ({params}) => {
         const [removed] = result.splice(sourceIndex, 1);
         result.splice(destinationIndex, 0, removed);
         setStatuses(result)
-        statusPatch({projectId: params.id, id: statusId, data: {order: destinationIndex}});
+        statusPatch({projectId: projectId, id: statusId, data: {order: destinationIndex}});
     };
 
     const handleTaskMove = (draggableId: string, source: DraggableLocation, destination: DraggableLocation) => {
@@ -64,7 +67,7 @@ const StatusList: FC<ProjectDetailsProps> = ({params}) => {
                 [source.droppableId]: sourceTasks,
             }));
             taskMove({
-                projectId: params.id,
+                projectId: projectId,
                 id: draggableId,
                 data: {order: destination.index, status: destination.droppableId}
             })
@@ -78,7 +81,7 @@ const StatusList: FC<ProjectDetailsProps> = ({params}) => {
             [destination.droppableId]: destinationTasks,
         }));
         taskMove({
-            projectId: params.id,
+            projectId: projectId,
             id: draggableId,
             data: {order: destination.index, status: destination.droppableId}
         })
@@ -104,7 +107,8 @@ const StatusList: FC<ProjectDetailsProps> = ({params}) => {
 
 
     return (
-        <div className="flex gap-10 rounded-sm">
+        <div className="flex flex-col flex-1 rounded-sm min-w-0 overflow-hidden">
+
             <DragDropContext onDragEnd={onDragEnd}>
                 <Droppable
                     droppableId="board"
@@ -112,15 +116,14 @@ const StatusList: FC<ProjectDetailsProps> = ({params}) => {
                     direction={'horizontal'}
                 >
                     {(provided) => (
-                        <div className='inline-flex' ref={provided.innerRef} {...provided.droppableProps}>
+                        <div className='flex flex-1 overflow-y-hidden overflow-x-auto'
+                             ref={provided.innerRef} {...provided.droppableProps}>
                             {statuses.map((status, key) => (
                                 <StatusItem
                                     key={status.id}
                                     index={key}
                                     status={status}
-                                    // tasks={tasksByStatus[status.id].sort((a, b) => a.order > b.order ? 1 : -1)}
                                     tasks={tasksByStatus[status.id]}
-                                    params={params}
                                 />
                             ))}
                             {provided.placeholder}

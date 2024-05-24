@@ -31,6 +31,8 @@ class GroupMoveSerializer(ModelSerializer):
 
 
 class MemberUpdateSerializer(ModelSerializer):
+    groups = PrimaryKeyRelatedField(queryset=Group.objects, many=True)
+    
     class Meta:
         model = ProjectMember
         fields = ('groups',)
@@ -61,6 +63,8 @@ class CommentCreateSerializer(ModelSerializer):
 
 
 class TaskCreateSerializer(ModelSerializer):
+    markers = PrimaryKeyRelatedField(queryset=Marker.objects, many=True)
+ 
     class Meta:
         model = Task
         fields = (

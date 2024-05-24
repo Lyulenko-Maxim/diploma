@@ -1,17 +1,14 @@
 'use client'
-import React from 'react';
-import {ProjectDetailsProps} from "@/app/me/projects/[id]/page";
+import React, {useEffect} from 'react';
 import {useProjectRetrieve} from "@/hooks/project.hooks";
 import StatusList from "@/components/board/status/StatusList";
+import {addRecentProject} from "@/app/me/projects/recent";
+import {useProjectParams} from "@/app/me/projects/[projectId]/providers";
 
 
-const ProjectDetails = ({params}: ProjectDetailsProps) => {
-    const {data: project} = useProjectRetrieve(params.id);
-
+const ProjectDetails = () => {
     return (
-        <div>
-            <StatusList params={params}/>
-        </div>
+        <></>
     );
 };
 

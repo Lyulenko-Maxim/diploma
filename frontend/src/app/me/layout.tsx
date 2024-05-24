@@ -20,11 +20,7 @@ export default function Layout({children,}: {
 }) {
     return (
         <MainLayout>
-            <div className='flex flex-1 overflow-hidden'>
-                <Aside/>
-                {children}
-            </div>
-
+            {children}
         </MainLayout>
     )
 }

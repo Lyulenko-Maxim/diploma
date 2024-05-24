@@ -10,7 +10,6 @@ class JWTAuthentication(BaseAuthentication):
     Аутентификация через JWT-токены.
     """
 
-
     def authenticate(self, request):
         User = get_user_model()
         access_token, _ = JWTService.get_tokens_from_request(request=request)

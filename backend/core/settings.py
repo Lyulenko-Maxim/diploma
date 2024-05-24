@@ -158,7 +158,7 @@ REST_FRAMEWORK = {
         'src.authentication.authentication.JWTAuthentication',
     ],
     'EXCEPTION_HANDLER': 'src.api.v1.exceptions.api_exception_handler',
-    'DATETIME_FORMAT': "%d-%m-%Y %H:%M",
+    # 'DATETIME_FORMAT': "%d-%m-%Y %H:%M",
 }
 
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
@@ -192,7 +192,7 @@ cred = credentials.Certificate('core/fcm_secret.json')
 firebase_admin.initialize_app(cred)
 
 PUSH_NOTIFICATIONS_SETTINGS = {
-    'UPDATE_ON_DUPLICATE_REG_ID': True
+    'UPDATE_ON_DUPLICATE_REG_ID': True,
 }
 LOGGING = {
     'version': 1,

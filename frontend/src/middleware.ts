@@ -6,7 +6,6 @@ export async function middleware(request: NextRequest, response: NextResponse) {
     const {url, cookies, nextUrl} = request
 
     const token = cookies.get(EnumTokens.ACCESS_TOKEN)?.value
-
     const isProtectedRoute = url.includes('/me')
 
     if (!token && isProtectedRoute) {

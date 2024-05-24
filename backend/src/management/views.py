@@ -272,7 +272,7 @@ class MarkerViewSet(MapMixin, ModelViewSet):
 
     def get_queryset(self):
         project = Project.objects.current_or_404(pk=self.kwargs.get('project_pk'), request=self.request)
-        return Marker.objects.filter(project=project).order_by('order')
+        return Marker.objects.filter(project=project).order_by('-created_at')
 
     def get_object(self):
         marker = Marker.objects.current_or_404(

@@ -8,6 +8,14 @@ export enum StatusCategoryEnum {
 
 export interface IStatus extends IBase {
     name: string,
-    category: StatusCategoryEnum | StatusCategoryEnum.DEFAULT,
+    category: StatusCategoryEnum,
     order: number,
+}
+
+export interface IStatusInput extends Omit<IStatus, 'id'> {
+
+}
+
+export interface IStatusMove extends Pick<IStatus, 'order'> {
+
 }
